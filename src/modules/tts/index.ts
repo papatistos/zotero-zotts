@@ -76,6 +76,41 @@ async function initEngines(addon: Addon) {
       }
     )
 
+    let openaiPromise = import("./openai").then(
+      (e) => {
+          e.setDefaultPrefs()
+
+          addon.data.tts.engines["openai"] = {
+              status: "loading",
+              speak: e.speak,
+              stop: e.stop,
+              canPause: true,
+              pause: e.pause,
+              resume: e.resume,
+              skipBackward: e.skipBackward,
+              skipForward: e.skipForward,
+              replaySection: e.replaySection,
+              extras: {
+                  getVoices: e.getVoices,
+                  getModels: e.getModels,
+                  dispose: e.dispose
+              }
+          }
+
+          return e
+      }
+    ).then(
+      async (e) => {
+          await e.initEngine()
+          addon.data.tts.engines["openai"].status = "ready"
+      }
+    ).catch(
+      (e) => {
+          addon.data.tts.engines["openai"].errorMsg = e
+          addon.data.tts.engines["openai"].status = "error"
+      }
+    )
+
     // TODO: future - implement more engines
     //   Google?
     //   OS native (macOS, Windows, Linux) but not WSA?
@@ -85,7 +120,7 @@ async function initEngines(addon: Addon) {
         await Promise.any([
             wsaPromise,
             azurePromise,
-            // TODO: future - other engines promises here
+            openaiPromise,
         ])
         addon.data.tts.status = "ready"
     } catch {
@@ -118,6 +153,9 @@ type TTSEngine = (TTSEngineWithPause | TTSEngineWithoutPause) & {
         [key: string]: any
     }
     errorMsg?: string
+    skipBackward?: () => void
+    skipForward?: () => void
+    replaySection?: () => void
 }
 
 export {
