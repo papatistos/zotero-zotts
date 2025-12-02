@@ -4,6 +4,9 @@ ZoTTS is a Zotero plugin to add TTS functionality
 [![Zotero target version 7](https://img.shields.io/badge/Zotero-7-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
 [![Using Zotero Plugin Template](https://img.shields.io/badge/Using-Zotero%20Plugin%20Template-blue?style=flat-square&logo=github)](https://github.com/windingwind/zotero-plugin-template)
 
+> [!NOTE]
+> This is a fork of [the original repository](https://github.com/ImperialSquid/zotero-zotts/) (via https://github.com/KanaHayama/zotero-zotts). It was created to add support for OpenAI's TTS engine. While I was at it, I also added buttons to skip 10s forward or backwards and to replay the current selection. To avoid unnecessary API calls for such skipping, I also added a cache for the current text selection.
+
 ## Install :rocket:
 
 > The latest stable version is available [here](https://github.com/ImperialSquid/zotero-zotts/releases/latest)
@@ -45,7 +48,7 @@ In the Library tab, right clicking an item will bring up a context menu, you can
 
 ![](docs/resources/right-click-buttons.png)
 
-In Reader tabs there's also buttons for playing/pausing/cancelling in the top right. These will act the same as using the speak/pause/cancel shortcuts in terms of speaking selected text/annotations/full text.
+In Reader tabs there's also buttons for playing/pausing/cancelling in the top right, as well as skipping forward/backward and replaying the last segment (note that skip/replay controls currently only work with the OpenAI engine). These will act the same as using the speak/pause/cancel shortcuts in terms of speaking selected text/annotations/full text.
 
 (Note that doing this ignores whatever Shift Modifier settings you have, and whether you're holding shift when the button is clicked).
 
@@ -60,7 +63,7 @@ In the preferences you can:
 - **Enable/disable queueing**
   - If you want to speak a new item, should ZoTTS add it to a queue, or cancel the current item and speak the new one?
 - **Adjust the current voice and related settings**
-  - Voices used are the ones built in to your computer
+  - Voices used are the ones built in to your computer (WebSpeech), Azure TTS, or OpenAI TTS
   - You can also adjust the rate/pitch/volume
 - **Tweak shortcuts**
   - Rebind the speak, pause and cancel shortcuts to use other letters
