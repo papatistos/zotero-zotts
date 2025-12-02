@@ -96,21 +96,14 @@ function setDefaultPrefs() {
 async function initEngine() {
     let initAttempt = () => {
         return new Promise<Error | void>((resolve, reject) => {
-            if (window.speechSynthesis.getVoices().length < 1 ) {
-                reject("no-voices-found")  // reject on no voices
+            const voices = window.speechSynthesis.getVoices()
+
+            if (voices.length < 1) {
+                reject("no-voices-found")  // retry until voices are exposed by the browser
+                return
             }
 
-            let utt = new window.SpeechSynthesisUtterance("initialised")
-            utt.volume = 0  // prevent unnecessary noise
-
-            utt.onerror = (event) => {
-                reject(event.error)  // reject on errored utterance
-            }
-            utt.onend = () => {
-                resolve()  // voices are present and utterance succeeds, resolve
-            }
-
-            window.speechSynthesis.speak(utt)
+            resolve()
         })
     }
 

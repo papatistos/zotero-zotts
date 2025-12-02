@@ -8,7 +8,7 @@ import { registerReaderListeners } from "./modules/reader"
 import { cycleFavourites } from "./modules/favourites";
 import { initLocale } from "./modules/utils/locale"
 import { initEngines, checkStatus } from "./modules/tts"
-import { speak, stop, pause, resume, speakOrResume, speakTest, speedChange } from "./modules/tts/ttsHooks";
+import { speak, stop, pause, resume, speakOrResume, speakTest, speedChange, skipBackward, skipForward, replaySection } from "./modules/tts/ttsHooks";
 import { loadIcons } from "./modules/utils/icons";
 import { notifyStatus } from "./modules/utils/notify";
 
@@ -35,13 +35,16 @@ async function onStartup() {
 async function onMainWindowLoad(win: Window): Promise<void> {
   await new Promise((resolve) => {
     if (win.document.readyState !== "complete") {
-      win.document.addEventListener("readystatechange", () => {
+      const listener = () => {
         if (win.document.readyState === "complete") {
+          win.document.removeEventListener("readystatechange", listener)
           resolve(void 0)
         }
-      })
+      }
+      win.document.addEventListener("readystatechange", listener)
+    } else {
+      resolve(void 0)
     }
-    resolve(void 0)
   })
 
   await Promise.all([
@@ -52,6 +55,11 @@ async function onMainWindowLoad(win: Window): Promise<void> {
 
   // TODO: optim - create custom toolkit to minify
   addon.data.ztoolkit = new ZoteroToolkit()
+  
+  // Disable FieldHooks debug traces (ZoTTS doesn't use FieldHooks)
+  if (addon.data.ztoolkit.FieldHooks) {
+    addon.data.ztoolkit.FieldHooks.basicOptions.log.disableConsole = true
+  }
 
   // TODO: l10n - implement locale appending
   // (win as any).MozXULElement.insertFTLIfNeeded(
@@ -115,6 +123,12 @@ const onSpeakTest = speakTest
 
 const onSpeedChange = speedChange
 
+const onSkipBackward = skipBackward
+
+const onSkipForward = skipForward
+
+const onReplaySection = replaySection
+
 const onCycleFavourite = cycleFavourites
 
 const onPrefsLoad = prefsLoadHook
@@ -133,6 +147,9 @@ export default {
   onSpeakOrResume,
   onSpeakTest,
   onSpeedChange,
+  onSkipBackward,
+  onSkipForward,
+  onReplaySection,
   onCycleFavourite,
   onPrefsLoad,
   onPrefsRefresh

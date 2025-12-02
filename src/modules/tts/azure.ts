@@ -118,6 +118,7 @@ class TextSectionSplitter {
 // Ogg/Opus stream segmenter for generating playable segments
 class OggSegmenter {
     private static readonly CRC_POLYNOMIAL = 0xEDB88320;
+    private static readonly MAX_PARSE_BUFFER_SIZE = 1 * 1024 * 1024; // 1MB max buffer to prevent unbounded growth
 
     // State - Parsing
     private parseBuffer: Uint8Array = new Uint8Array(0);
@@ -252,7 +253,16 @@ class OggSegmenter {
         if (this.parseBuffer.length === 0) {
             return chunk;
         }
-        const combined = new Uint8Array(this.parseBuffer.length + chunk.length);
+        
+        const newSize = this.parseBuffer.length + chunk.length;
+        if (newSize > OggSegmenter.MAX_PARSE_BUFFER_SIZE) {
+            ztoolkit.log(`WARNING: Ogg parse buffer exceeded max size (${newSize} bytes), resetting to prevent memory leak`);
+            // Reset and start fresh with just the new chunk
+            this.parseBuffer = new Uint8Array(0);
+            return chunk;
+        }
+        
+        const combined = new Uint8Array(newSize);
         combined.set(this.parseBuffer, 0);
         combined.set(chunk, this.parseBuffer.length);
         return combined;
@@ -432,11 +442,13 @@ class OggSegmenter {
 // Audio player class for handling Ogg/Opus playback
 class AudioPlayer {
     private static readonly MIN_SEGMENT_SIZE = 8 * 1024; // 8KB minimum buffer size
+    private static readonly MAX_QUEUE_SIZE = 10 * 1024 * 1024; // 10MB max queue size to prevent unbounded growth
 
     private oggSegmenter: OggSegmenter;
 
     private audioElement: HTMLAudioElement | null = null;
     private audioQueue: Uint8Array[] = [];
+    private activeBlobUrls: Set<string> = new Set();
     private isPlaying: boolean = false;
     private isPaused: boolean = false;
     private isInitialized: boolean = false;
@@ -468,6 +480,13 @@ class AudioPlayer {
     public async queueAudioChunk(audioData: Uint8Array): Promise<void> {
         if (!this.isInitialized) {
             await this.initialize();
+        }
+
+        // Check queue size to prevent unbounded growth
+        const currentQueueSize = this.audioQueue.reduce((sum, chunk) => sum + chunk.length, 0);
+        if (currentQueueSize + audioData.length > AudioPlayer.MAX_QUEUE_SIZE) {
+            ztoolkit.log(`WARNING: Audio queue size limit reached (${currentQueueSize} bytes), dropping chunk to prevent memory leak`);
+            return;
         }
 
         if (!this.headersExtracted) {
@@ -544,12 +563,21 @@ class AudioPlayer {
         this.headersExtracted = false;
         this.oggSegmenter.reset();
 
+        // Revoke ALL blob URLs that were created
+        for (const url of this.activeBlobUrls) {
+            URL.revokeObjectURL(url);
+        }
+        this.activeBlobUrls.clear();
+
         if (this.audioElement && this.audioElement.src) {
             if (!this.audioElement.paused) {
                 this.audioElement.pause();
             }
             if (this.audioElement.src.startsWith("blob:")) {
-                URL.revokeObjectURL(this.audioElement.src);
+                // This URL might already be revoked above, but check anyway
+                if (!this.activeBlobUrls.has(this.audioElement.src)) {
+                    URL.revokeObjectURL(this.audioElement.src);
+                }
             }
             this.audioElement.removeAttribute("src");
             this.audioElement.load();
@@ -638,6 +666,7 @@ class AudioPlayer {
         // Create blob and URL for playback
         const blob = new Blob([segment], { type: "audio/ogg; codecs=opus" });
         const url = URL.createObjectURL(blob);
+        this.activeBlobUrls.add(url);
 
         if (this.audioElement) {
             this.audioElement.src = url;
@@ -650,12 +679,14 @@ class AudioPlayer {
                 playPromise.catch((error) => {
                     ztoolkit.log(`Audio playback error: ${error}`);
                     this.isPlaying = false;
+                    this.activeBlobUrls.delete(url);
                     URL.revokeObjectURL(url);
                 });
             }
 
             // When segment finishes, try to play next segment
             this.audioElement.onended = async () => {
+                this.activeBlobUrls.delete(url);
                 URL.revokeObjectURL(url);
                 this.isPlaying = false;
 

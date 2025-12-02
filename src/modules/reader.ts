@@ -217,15 +217,61 @@ export function registerReaderListeners() {
                             tag: "button",
                             namespace: "html",
                             properties: {
-                                innerHTML: `${ addon.data.ui.icons.play }`,
-                                // innerHTML: "PLAY"
+                                innerHTML: `${ addon.data.ui.icons.skipBackward }`,
                             },
                             classList: ["toolbar-button",],
                             listeners: [
                                 {
                                     type: "click",
                                     listener: (e) => {
-                                        // ztoolkit.log(`${reader.itemID}`)
+                                        addon.hooks.onSkipBackward()
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            tag: "button",
+                            namespace: "html",
+                            properties: {
+                                innerHTML: `${ addon.data.ui.icons.replay }`,
+                            },
+                            classList: ["toolbar-button",],
+                            listeners: [
+                                {
+                                    type: "click",
+                                    listener: (e) => {
+                                        addon.hooks.onReplaySection()
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            tag: "button",
+                            namespace: "html",
+                            properties: {
+                                innerHTML: `${ addon.data.ui.icons.skipForward }`,
+                            },
+                            classList: ["toolbar-button",],
+                            listeners: [
+                                {
+                                    type: "click",
+                                    listener: (e) => {
+                                        addon.hooks.onSkipForward()
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            tag: "button",
+                            namespace: "html",
+                            properties: {
+                                innerHTML: `${ addon.data.ui.icons.play }`,
+                            },
+                            classList: ["toolbar-button",],
+                            listeners: [
+                                {
+                                    type: "click",
+                                    listener: (e) => {
                                         addon.hooks.onSpeakOrResume()
                                     }
                                 }
@@ -236,14 +282,12 @@ export function registerReaderListeners() {
                             namespace: "html",
                             properties: {
                                 innerHTML: `${ addon.data.ui.icons.pause }`,
-                                // innerHTML: "PAUSE"
                             },
                             classList: ["toolbar-button",],
                             listeners: [
                                 {
                                     type: "click",
                                     listener: (e) => {
-                                        // ztoolkit.log(`${reader.itemID}`)
                                         addon.hooks.onPause()
                                     }
                                 }
@@ -254,14 +298,12 @@ export function registerReaderListeners() {
                             namespace: "html",
                             properties: {
                                 innerHTML: `${ addon.data.ui.icons.cancel }`,
-                                // innerHTML: "CANCEL"
                             },
                             classList: ["toolbar-button",],
                             listeners: [
                                 {
                                     type: "click",
                                     listener: (e) => {
-                                        // ztoolkit.log(`${reader.itemID}`)
                                         addon.hooks.onStop()
                                     }
                                 }
@@ -284,15 +326,166 @@ export function registerReaderListeners() {
       config.addonID
     )
 
+    // Inject UI into existing open readers without reloading tabs
+    // This is safe because it only refreshes the reader UI, doesn't close/reopen tabs
     if (getPref("general.reloadTabs")) {
-        // reload all tabs to display ui on startup
-        let num = Zotero_Tabs._tabs.length
-        Zotero_Tabs.closeAll()
-        for (let i = 0; i < num; i++){
-            setTimeout(
-              () => Zotero_Tabs.undoClose(),
-              2*(i+1)  // set tiny and distinct timers to not overload Zotero
-            )
+        injectUIIntoExistingReaders();
+    }
+}
+
+/**
+ * Safely inject UI elements into already-open reader tabs without reloading them.
+ * This manually adds toolbar buttons to readers that were opened before the plugin loaded.
+ */
+function injectUIIntoExistingReaders(): void {
+    try {
+        // Get all reader tabs using Zotero_Tabs._tabs
+        const tabs = Zotero_Tabs._tabs;
+        ztoolkit.log(`Found ${tabs.length} total tabs`);
+        
+        let readerCount = 0;
+        for (const tab of tabs) {
+            try {
+                // Only process reader tabs
+                if (tab.type !== 'reader') {
+                    continue;
+                }
+                
+                readerCount++;
+                const reader = Zotero.Reader.getByTabID(tab.id);
+                if (!reader) {
+                    ztoolkit.log(`No reader found for tab ${tab.id}`);
+                    continue;
+                }
+                
+                // Check if reader is fully loaded
+                if (!reader._iframeWindow?.document) {
+                    ztoolkit.log(`Reader ${tab.id} not fully loaded yet`);
+                    continue;
+                }
+                
+                const doc = reader._iframeWindow.document;
+                
+                // Log toolbar structure for debugging
+                const toolbarElement = doc.querySelector('.toolbar');
+                if (toolbarElement) {
+                    ztoolkit.log(`Toolbar HTML for tab ${tab.id}: ${toolbarElement.outerHTML.substring(0, 500)}`);
+                }
+                
+                // Find the toolbar container - look for the right-side toolbar section
+                // The append() function from renderToolbar adds to a specific container
+                let toolbar = doc.querySelector('.toolbar .end');
+                if (!toolbar) {
+                    // Fallback to main toolbar
+                    toolbar = doc.querySelector('.toolbar');
+                }
+                if (!toolbar) {
+                    ztoolkit.log(`No toolbar found in reader for tab ${tab.id}`);
+                    continue;
+                }
+                
+                // Check if our buttons are already there
+                if (toolbar.querySelector('[data-zotts-toolbar]')) {
+                    ztoolkit.log(`Toolbar already has ZoTTS buttons for tab ${tab.id}`);
+                    continue;
+                }
+                
+                // Create the same toolbar UI as in the renderToolbar event
+                const readerToolbarUI = ztoolkit.UI.createElement(doc, "div", {
+                    attributes: {
+                        'data-zotts-toolbar': 'true'  // Mark so we don't duplicate
+                    },
+                    children: [
+                        {
+                            tag: "button",
+                            namespace: "html",
+                            properties: {
+                                innerHTML: `${addon.data.ui.icons.skipBackward}`,
+                            },
+                            classList: ["toolbar-button"],
+                            listeners: [{
+                                type: "click",
+                                listener: () => addon.hooks.onSkipBackward()
+                            }]
+                        },
+                        {
+                            tag: "button",
+                            namespace: "html",
+                            properties: {
+                                innerHTML: `${addon.data.ui.icons.replay}`,
+                            },
+                            classList: ["toolbar-button"],
+                            listeners: [{
+                                type: "click",
+                                listener: () => addon.hooks.onReplaySection()
+                            }]
+                        },
+                        {
+                            tag: "button",
+                            namespace: "html",
+                            properties: {
+                                innerHTML: `${addon.data.ui.icons.skipForward}`,
+                            },
+                            classList: ["toolbar-button"],
+                            listeners: [{
+                                type: "click",
+                                listener: () => addon.hooks.onSkipForward()
+                            }]
+                        },
+                        {
+                            tag: "button",
+                            namespace: "html",
+                            properties: {
+                                innerHTML: `${addon.data.ui.icons.play}`,
+                            },
+                            classList: ["toolbar-button"],
+                            listeners: [{
+                                type: "click",
+                                listener: () => addon.hooks.onSpeakOrResume()
+                            }]
+                        },
+                        {
+                            tag: "button",
+                            namespace: "html",
+                            properties: {
+                                innerHTML: `${addon.data.ui.icons.pause}`,
+                            },
+                            classList: ["toolbar-button"],
+                            listeners: [{
+                                type: "click",
+                                listener: () => addon.hooks.onPause()
+                            }]
+                        },
+                        {
+                            tag: "button",
+                            namespace: "html",
+                            properties: {
+                                innerHTML: `${addon.data.ui.icons.cancel}`,
+                            },
+                            classList: ["toolbar-button"],
+                            listeners: [{
+                                type: "click",
+                                listener: () => addon.hooks.onStop()
+                            }]
+                        },
+                    ],
+                    styles: {
+                        display: "flex",
+                    }
+                });
+                
+                // Append to the toolbar
+                toolbar.appendChild(readerToolbarUI);
+                addon.data.ui.toolbars.push(readerToolbarUI);
+                
+                ztoolkit.log(`Successfully injected toolbar into reader for tab ${tab.id}`);
+            } catch (error) {
+                ztoolkit.log(`Failed to inject UI into tab: ${error}`);
+            }
         }
+        
+        ztoolkit.log(`Processed ${readerCount} reader tabs`);
+    } catch (error) {
+        ztoolkit.log(`Failed to inject UI into existing readers: ${error}`);
     }
 }

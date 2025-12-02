@@ -18,8 +18,24 @@ function cycleFavourites() {
     const index = faves.findIndex((f) => compareFav(f, currSettings))
     const newSettings = faves[(index + 1) % faves.length]
 
+    // Dispose of current engine if switching to a different one
+    const previousEngine = getPref("ttsEngine.current") as string;
+    const newEngine = newSettings["engine"] as string;
+    
+    if (previousEngine !== newEngine) {
+        const prevEngineData = addon.data.tts.engines[previousEngine];
+        if (prevEngineData?.extras?.dispose) {
+            try {
+                prevEngineData.extras.dispose();
+            } catch (error) {
+                ztoolkit.log(`Error disposing ${previousEngine} engine: ${error}`);
+            }
+        }
+    }
+
     // set new engine, then cycle through the rest of the keys an set values
-    setPref("ttsEngine.current", (newSettings["engine"] as string))
+    setPref("ttsEngine.current", newEngine)
+    addon.data.tts.current = newEngine;
     Object.keys(newSettings).forEach((key) => {
         if (key === "engine") {
             return

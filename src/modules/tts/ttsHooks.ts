@@ -166,6 +166,33 @@ function speedChange(speedUp = true){
     setPref(`${currEngine}.rate`, newSpeed)
 }
 
+function skipBackward() {
+    const engine = addon.data.tts.engines[addon.data.tts.current];
+    if (engine.status !== "ready") { return }
+    
+    if (engine.skipBackward) {
+        engine.skipBackward();
+    }
+}
+
+function skipForward() {
+    const engine = addon.data.tts.engines[addon.data.tts.current];
+    if (engine.status !== "ready") { return }
+    
+    if (engine.skipForward) {
+        engine.skipForward();
+    }
+}
+
+function replaySection() {
+    const engine = addon.data.tts.engines[addon.data.tts.current];
+    if (engine.status !== "ready") { return }
+    
+    if (engine.replaySection) {
+        engine.replaySection();
+    }
+}
+
 export {
     speak,
     stop,
@@ -173,5 +200,8 @@ export {
     resume,
     speakOrResume,
     speakTest,
-    speedChange
+    speedChange,
+    skipBackward,
+    skipForward,
+    replaySection
 }
