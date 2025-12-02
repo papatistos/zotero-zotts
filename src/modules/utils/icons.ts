@@ -28,4 +28,22 @@ async function loadIcons() {
       .then((text) => {
           addon.data.ui.icons["cancel"] = text
       })
+
+    await fetch(`chrome://${config.addonRef}/content/icons/skip-backward@16.svg`)
+      .then((res) => res.text())
+      .then((text) => {
+          addon.data.ui.icons["skipBackward"] = text
+      })
+
+    await fetch(`chrome://${config.addonRef}/content/icons/skip-forward@16.svg`)
+      .then((res) => res.text())
+      .then((text) => {
+          addon.data.ui.icons["skipForward"] = text
+      })
+
+    await fetch(`chrome://${config.addonRef}/content/icons/replay@16.svg`)
+      .then((res) => res.text())
+      .then((text) => {
+          addon.data.ui.icons["replay"] = text
+      })
 }
