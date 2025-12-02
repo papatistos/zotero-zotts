@@ -60,6 +60,13 @@ pref-openai-rate = Rate
 pref-openai-testText = Test sentence:
 pref-openai-testVoice = Test Voice
 
+# === Ignore Annotations
+pref-sect-ignoreAnnotations = Ignore Annotations
+
+pref-ignoreAnnotations-description = Highlight headers, footers, or other text to ignore with the selected colour. The plugin will automatically remove matching text (with numbers generalised) from all speech output.
+
+pref-ignoreAnnotations-color = Annotation colour to use as "ignore" marker
+
 # === Shortcuts
 pref-sect-shortcuts = Shortcuts
 

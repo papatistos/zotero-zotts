@@ -1,9 +1,34 @@
 import ReaderInstance = _ZoteroTypes.ReaderInstance;
 import { notifyGeneric } from "./notify";
 import { getString } from "./locale";
+import { getPref } from "./prefs";
+
+function removeIgnoredText(text: string, reader: ReaderInstance): string {
+    // Remove text marked by annotations with the configured ignore color
+    const ignoreColor = getPref("ignoreAnnotations.color") as string
+    const ignoreAnnotations = getAllAnnotations(reader).filter(anno => 
+        anno.color === ignoreColor
+    )
+    
+    for (const anno of ignoreAnnotations) {
+        if (anno.text) {
+            // Convert annotation text to a pattern where digit sequences become \d+
+            // This allows "136 Asle H. Kiran" to match "137 Asle H. Kiran", etc.
+            const pattern = anno.text
+                .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')  // Escape special regex chars
+                .replace(/\d+/g, '\\d+')                  // Replace digit sequences with \d+
+            
+            const regex = new RegExp(pattern, 'g')
+            text = text.replaceAll(regex, "")
+        }
+    }
+    
+    return text
+}
 
 export function getSelectedText(reader: ReaderInstance) {
-    return ztoolkit.Reader.getSelectedText(reader)
+    let text = ztoolkit.Reader.getSelectedText(reader)
+    return removeIgnoredText(text, reader)
 }
 
 export async function getSelectedTextToEnd(reader: ReaderInstance) {
@@ -49,14 +74,20 @@ export async function getSelectedTextToEnd(reader: ReaderInstance) {
     }
 
     // recombine separator with "from here" and return
-    return selected + parts[1]
+    let result = selected + parts[1]
+    return removeIgnoredText(result, reader)
 }
 
 export async function getFullText(reader: ReaderInstance) {
-    return await Zotero.Items.get(reader.itemID ?? "").attachmentText
+    let text = await Zotero.Items.get(reader.itemID ?? "").attachmentText
+    return removeIgnoredText(text, reader)
 }
 
 export function getSelectedAnnotations(reader: ReaderInstance) {
     let annos = reader._internalReader._annotationManager._annotations
     return annos.filter((anno) => reader._internalReader._state.selectedAnnotationIDs.includes(anno.id))
+}
+
+export function getAllAnnotations(reader: ReaderInstance) {
+    return reader._internalReader._annotationManager._annotations
 }

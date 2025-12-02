@@ -23,4 +23,9 @@ export function setDefaultPrefs() {
     } else if (!getPref("ttsEngine.reloadTries")) {
         setPref("ttsEngine.reloadTries", 5)
     }
+
+    // Default color for ignore annotations
+    if (!getPref("ignoreAnnotations.color")) {
+        setPref("ignoreAnnotations.color", "#aaaaaa")  // grey
+    }
 }
