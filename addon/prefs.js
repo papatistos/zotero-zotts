@@ -1,4 +1,4 @@
-pref("__prefsPrefix__.ttsEngine.current", "");
+pref("__prefsPrefix__.ttsEngine.current", "webSpeech");
 pref("__prefsPrefix__.ttsEngine.reloadTries", 0);
 pref("__prefsPrefix__.newItemBehaviour", "cancel");
 pref("__prefsPrefix__.general.reloadTabs", true);
@@ -12,6 +12,11 @@ pref("__prefsPrefix__.azure.language", "en-US");
 pref("__prefsPrefix__.azure.voice", "");
 pref("__prefsPrefix__.azure.volume", 100);
 pref("__prefsPrefix__.azure.rate", 100);
+pref("__prefsPrefix__.openai.apiKey", "");
+pref("__prefsPrefix__.openai.model", "tts-1");
+pref("__prefsPrefix__.openai.voice", "alloy");
+pref("__prefsPrefix__.openai.volume", 100);
+pref("__prefsPrefix__.openai.rate", 100);
 pref("__prefsPrefix__.shortcuts.speak", "S");
 pref("__prefsPrefix__.shortcuts.pause", "P");
 pref("__prefsPrefix__.shortcuts.cancel", "C");

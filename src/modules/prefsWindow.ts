@@ -3,11 +3,15 @@ import { getString } from "./utils/locale";
 import { getPref, setPref } from "./utils/prefs";
 import { addFavourite, removeFavourite } from "./favourites";
 import { getAzureConfig } from "./tts/azure";
+import { getOpenAIConfig } from "./tts/openai";
 
 // Azure voices cache (in-memory, cleared on reload)
 let azureVoicesCache: any[] | null = null;
 let lastAzureKey: string = "";
 let lastAzureRegion: string = "";
+
+// OpenAI cache
+let lastOpenAIKey: string = "";
 
 function registerPrefsWindow() {
     Zotero.PreferencePanes.register(
@@ -85,6 +89,15 @@ function prefsLoadHook(type: string, doc: Document) {
         azureTestText.value = getString("speak-testVoice");
     }
 
+    // set default test text for OpenAI
+    const openaiTestText = doc.getElementById("openai-testText") as HTMLInputElement;
+    if (openaiTestText) {
+        openaiTestText.value = getString("speak-testVoice");
+    }
+
+    // Initialize OpenAI controls
+    updateOpenAIControls(doc);
+
     // do refresh to set warning if needed
     prefsRefreshHook("load", doc)
 }
@@ -107,6 +120,10 @@ function prefsRefreshHook(type: string, doc: Document) {
     } else if (type === "azure-language-change") {
         handleAzureLanguageChange(doc)
     } else if (type === "azure-voice-change") {
+        updateTestVoiceButtons(doc)
+    } else if (type === "openai-key-change") {
+        handleOpenAIKeyChange(doc)
+    } else if (type === "openai-model-change" || type === "openai-voice-change") {
         updateTestVoiceButtons(doc)
     } else if (type === "subs-text") {
         setSubsTextareaWarning(doc)
@@ -164,9 +181,9 @@ function updateTestVoiceButtons(doc: Document): void {
     const azureBtn = doc.getElementById("azure-testVoice-btn") as HTMLButtonElement;
     if (azureBtn) {
         // Start with config values (env vars + preferences)
-        const config = getAzureConfig();
-        let key = config.key;
-        let region = config.region;
+        const azureConfig = getAzureConfig();
+        let key = azureConfig.key;
+        let region = azureConfig.region;
 
         // Override with UI input if present (captures real-time changes)
         const keyInput = doc.getElementById("azure-key") as HTMLInputElement;
@@ -193,6 +210,33 @@ function updateTestVoiceButtons(doc: Document): void {
             azureBtn.removeAttribute("disabled");
         } else {
             azureBtn.setAttribute("disabled", "true");
+        }
+    }
+
+    // Update OpenAI Test Voice button
+    const openaiBtn = doc.getElementById("openai-testVoice-btn") as HTMLButtonElement;
+    if (openaiBtn) {
+        // Start with config values (env vars + preferences)
+        const openaiConfig = getOpenAIConfig();
+        let apiKey = openaiConfig.apiKey;
+
+        // Override with UI input if present (captures real-time changes)
+        const keyInput = doc.getElementById("openai-key") as HTMLInputElement;
+        const uiKey = (keyInput?.value || "").trim();
+        if (uiKey) apiKey = uiKey;
+
+        // Read model and voice from UI
+        const modelMenu = doc.getElementById("openai-model") as unknown as XULMenuListElement;
+        const voiceMenu = doc.getElementById("openai-voice") as unknown as XULMenuListElement;
+
+        const model = (modelMenu?.value || "").trim();
+        const voice = (voiceMenu?.value || "").trim();
+
+        // Enable only if API key, model, and voice are set
+        if (apiKey && model && voice) {
+            openaiBtn.removeAttribute("disabled");
+        } else {
+            openaiBtn.setAttribute("disabled", "true");
         }
     }
 }
@@ -381,6 +425,63 @@ function unlockAzureControls(doc: Document): void {
 
     if (languageMenu) {
         languageMenu.removeAttribute("disabled");
+    }
+    if (voiceMenu) {
+        voiceMenu.removeAttribute("disabled");
+    }
+
+    // Update Test Voice button state based on current values
+    updateTestVoiceButtons(doc);
+}
+
+// OpenAI control management functions
+function handleOpenAIKeyChange(doc: Document): void {
+    const { apiKey: currentKey } = getOpenAIConfig();
+
+    // Check if value actually changed
+    if (currentKey !== lastOpenAIKey) {
+        lastOpenAIKey = currentKey;
+        updateOpenAIControls(doc);
+    }
+}
+
+function updateOpenAIControls(doc: Document): void {
+    const { apiKey } = getOpenAIConfig();
+
+    // Override with UI input if present
+    const keyInput = doc.getElementById("openai-key") as HTMLInputElement;
+    const uiKey = (keyInput?.value || "").trim();
+    const effectiveKey = uiKey || apiKey;
+
+    if (!effectiveKey) {
+        lockOpenAIControls(doc);
+    } else {
+        unlockOpenAIControls(doc);
+    }
+}
+
+function lockOpenAIControls(doc: Document): void {
+    const modelMenu = doc.getElementById("openai-model") as unknown as XULMenuListElement;
+    const voiceMenu = doc.getElementById("openai-voice") as unknown as XULMenuListElement;
+    const testVoiceBtn = doc.getElementById("openai-testVoice-btn") as HTMLButtonElement;
+
+    if (modelMenu) {
+        modelMenu.setAttribute("disabled", "true");
+    }
+    if (voiceMenu) {
+        voiceMenu.setAttribute("disabled", "true");
+    }
+    if (testVoiceBtn) {
+        testVoiceBtn.setAttribute("disabled", "true");
+    }
+}
+
+function unlockOpenAIControls(doc: Document): void {
+    const modelMenu = doc.getElementById("openai-model") as unknown as XULMenuListElement;
+    const voiceMenu = doc.getElementById("openai-voice") as unknown as XULMenuListElement;
+
+    if (modelMenu) {
+        modelMenu.removeAttribute("disabled");
     }
     if (voiceMenu) {
         voiceMenu.removeAttribute("disabled");
