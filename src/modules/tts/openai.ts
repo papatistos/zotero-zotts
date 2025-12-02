@@ -2,13 +2,22 @@ import { getPref, setPref } from "../utils/prefs";
 import { notifyGeneric } from "../utils/notify";
 import { getString } from "../utils/locale";
 
-// OpenAI Voice options
-type OpenAIVoice = "alloy" | "ash" | "coral" | "echo" | "fable" | "onyx" | "nova" | "sage" | "shimmer";
+// OpenAI Voice options (alphabetically ordered)
+type OpenAIVoice = "alloy" | "ash" | "coral" | "echo" | "fable" | "nova" | "onyx" | "sage" | "shimmer";
 type OpenAIModel = "tts-1" | "tts-1-hd";
+
+// Error codes for OpenAI TTS
+const ErrorCodes = {
+    CONFIG_INCOMPLETE: "config-incomplete",
+    AUTH_FAILED: "auth-failed",
+    CONNECTION_FAILED: "connection-failed",
+    RATE_LIMITED: "rate-limited",
+    API_ERROR: "api-error"
+} as const;
 
 // Text section splitter for handling long text synthesis
 class TextSectionSplitter {
-    private static readonly MAX_SECTION_SIZE = 4 * 1024; // 4K characters - OpenAI TTS has limit of 4096 characters
+    private static readonly MAX_SECTION_SIZE = 4096; // OpenAI TTS has limit of 4096 characters per request
 
     private fullText: string = "";
     private currentIndex: number = 0;
@@ -270,7 +279,7 @@ class OpenAISynthesizer {
 
         if (!apiKey) {
             ztoolkit.log("OpenAI TTS configuration incomplete: missing API key");
-            throw new Error("config-incomplete");
+            throw new Error(ErrorCodes.CONFIG_INCOMPLETE);
         }
 
         // Check if stopped before making request
@@ -301,11 +310,11 @@ class OpenAISynthesizer {
                 ztoolkit.log(`OpenAI TTS API error: ${response.status} ${response.statusText} - ${errorText}`);
 
                 if (response.status === 401) {
-                    throw new Error("auth-failed");
+                    throw new Error(ErrorCodes.AUTH_FAILED);
                 } else if (response.status === 429) {
-                    throw new Error("rate-limited");
+                    throw new Error(ErrorCodes.RATE_LIMITED);
                 } else {
-                    throw new Error("api-error");
+                    throw new Error(ErrorCodes.API_ERROR);
                 }
             }
 
@@ -323,15 +332,15 @@ class OpenAISynthesizer {
 
         } catch (error) {
             if (error instanceof Error && 
-                (error.message === "auth-failed" || 
-                 error.message === "rate-limited" || 
-                 error.message === "api-error" ||
-                 error.message === "config-incomplete")) {
+                (error.message === ErrorCodes.AUTH_FAILED || 
+                 error.message === ErrorCodes.RATE_LIMITED || 
+                 error.message === ErrorCodes.API_ERROR ||
+                 error.message === ErrorCodes.CONFIG_INCOMPLETE)) {
                 throw error;
             }
 
             ztoolkit.log(`OpenAI TTS network error: ${error}`);
-            throw new Error("connection-failed");
+            throw new Error(ErrorCodes.CONNECTION_FAILED);
         }
     }
 
@@ -459,16 +468,16 @@ function speak(text: string): void {
         ztoolkit.log(`OpenAI TTS error: ${error}`);
 
         let errorKey = "other";
-        if (error.message === "config-incomplete") {
-            errorKey = "config-incomplete";
-        } else if (error.message === "auth-failed") {
-            errorKey = "auth-failed";
-        } else if (error.message === "connection-failed") {
-            errorKey = "connection-failed";
-        } else if (error.message === "rate-limited") {
-            errorKey = "rate-limited";
-        } else if (error.message === "api-error") {
-            errorKey = "api-error";
+        if (error.message === ErrorCodes.CONFIG_INCOMPLETE) {
+            errorKey = ErrorCodes.CONFIG_INCOMPLETE;
+        } else if (error.message === ErrorCodes.AUTH_FAILED) {
+            errorKey = ErrorCodes.AUTH_FAILED;
+        } else if (error.message === ErrorCodes.CONNECTION_FAILED) {
+            errorKey = ErrorCodes.CONNECTION_FAILED;
+        } else if (error.message === ErrorCodes.RATE_LIMITED) {
+            errorKey = ErrorCodes.RATE_LIMITED;
+        } else if (error.message === ErrorCodes.API_ERROR) {
+            errorKey = ErrorCodes.API_ERROR;
         }
 
         notifyGeneric(
@@ -506,9 +515,9 @@ function dispose(): void {
     }
 }
 
-// Get available voices (static list for OpenAI)
+// Get available voices (static list for OpenAI, alphabetically ordered)
 function getVoices(): OpenAIVoice[] {
-    return ["alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"];
+    return ["alloy", "ash", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer"];
 }
 
 // Get available models (static list for OpenAI)
