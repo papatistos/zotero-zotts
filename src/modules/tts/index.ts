@@ -1,12 +1,6 @@
 import Addon from "../../addon"
 
 async function initEngines(addon: Addon) {
-    // Prevent duplicate initialization
-    if ((addon.data as any)._enginesInitialized) {
-        return;
-    }
-    (addon.data as any)._enginesInitialized = true;
-
     const { getPref } = await import("../utils/prefs");
 
     const currentEngine = getPref("ttsEngine.current") as string || "webSpeech";

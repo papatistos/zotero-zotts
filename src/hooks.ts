@@ -33,12 +33,6 @@ async function onStartup() {
 }
 
 async function onMainWindowLoad(win: Window): Promise<void> {
-  // Prevent duplicate initialization - only run once
-  if ((addon.data as any)._mainWindowLoaded) {
-    return;
-  }
-  (addon.data as any)._mainWindowLoaded = true;
-
   await new Promise((resolve) => {
     if (win.document.readyState !== "complete") {
       win.document.addEventListener("readystatechange", () => {
