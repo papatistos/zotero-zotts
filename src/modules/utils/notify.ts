@@ -6,15 +6,13 @@ export {
     notifyStatus
 }
 
-// Flag to ensure status notification is only shown once
-let statusNotified = false;
-
 function notifyStatus() {
-    // Only notify once to avoid duplicate "initialized" messages
-    if (statusNotified) {
+    // Use addon.data to track if we've already notified (more reliable than module-level variable)
+    // This prevents duplicate "initialized" messages when onMainWindowLoad is called multiple times
+    if ((addon.data as any)._statusNotified) {
         return;
     }
-    statusNotified = true;
+    (addon.data as any)._statusNotified = true;
     if (addon.data.tts.status === "error") {
         // ZoTTS has failed to load any engines
         const header =  getString("popup-addonErrorTitle")
