@@ -3,6 +3,7 @@
 ttsEngine-engineName = { $engine ->
     [webSpeech] Web Speech
     [azure] Azure Speech
+    [openai] OpenAI Speech
     *[other] Unknown Engine
 }
 
@@ -29,6 +30,14 @@ ttsEngine-errorCause = { $engine ->
         [connection-closed] Connection to Azure service was unexpectedly closed
         *[other] Unknown Error
     }
+    [openai] { $cause ->
+        [config-incomplete] API key not configured (enter it in preferences)
+        [auth-failed] Authentication failed (check API key)
+        [connection-failed] Failed to connect to OpenAI service
+        [rate-limited] Rate limit exceeded (wait and try again)
+        [api-error] OpenAI API returned an error
+        *[other] Unknown Error
+    }
 }
 
 ttsEngine-settingsFormatted = { $engine ->
@@ -41,6 +50,11 @@ ttsEngine-settingsFormatted = { $engine ->
     [azure]
         Region: { $region },
         Language: { $language },
+        Voice: { $voice },
+        Volume: { $volume },
+        Rate: { $rate }
+    [openai]
+        Model: { $model },
         Voice: { $voice },
         Volume: { $volume },
         Rate: { $rate }
