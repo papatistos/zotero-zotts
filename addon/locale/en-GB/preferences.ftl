@@ -15,8 +15,6 @@ pref-general-engine-webSpeech =
     .label = Web Speech
 pref-general-engine-azure =
     .label = Azure Speech
-pref-general-engine-openai =
-    .label = OpenAI Speech
 
 # === TTS General
 pref-status-unknown =
@@ -48,17 +46,6 @@ pref-azure-volume = Volume
 pref-azure-rate = Rate
 pref-azure-testText = Test sentence:
 pref-azure-testVoice = Test Voice
-
-# === OpenAI Speech
-pref-sect-openai = OpenAI Speech
-
-pref-openai-key = API Key
-pref-openai-model = Model
-pref-openai-voice = Voice
-pref-openai-volume = Volume
-pref-openai-rate = Rate
-pref-openai-testText = Test sentence:
-pref-openai-testVoice = Test Voice
 
 # === Shortcuts
 pref-sect-shortcuts = Shortcuts

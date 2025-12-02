@@ -49,9 +49,6 @@
             <radio id="engine-azure"
                    data-l10n-id="pref-general-engine-azure"
                    value="azure"/>
-            <radio id="engine-openai"
-                   data-l10n-id="pref-general-engine-openai"
-                   value="openai"/>
         </radiogroup>
     </html:div>
 </vbox>
@@ -153,6 +150,8 @@
     </html:button>
 
 </vbox>
+
+<!-- NEW ENGINES HERE -->
 
 <!-- Azure Speech Settings -->
 <vbox class="main-section" 
@@ -274,128 +273,6 @@
     <html:button id="azure-testVoice-btn"
                  onclick="Zotero.__addonInstance__.hooks.onSpeakTest('azure', window.document.getElementById('azure-testText').value)"
                  data-l10n-id="pref-azure-testVoice">
-    </html:button>
-
-</vbox>
-
-<!-- OpenAI Speech Settings -->
-<vbox class="main-section" 
-      id="__addonRef__-openai">
-    <label id="__addonRef__-openai-header">
-        <html:h1 data-l10n-id="pref-sect-openai"></html:h1>
-    </label>
-    <html:p id="openai-status"
-            data-l10n-id="pref-status-unknown"
-            style="text-align:center; color:tomato !important; font-weight:bold;">
-    </html:p>
-
-    <!-- API Key -->
-    <vbox>
-        <html:label data-l10n-id="pref-openai-key"
-                    for="openai-key">
-        </html:label>
-        <html:input id="openai-key"
-                    type="password"
-                    preference="__prefsPrefix__.openai.apiKey"
-                    onchange="Zotero.__addonInstance__.hooks.onPrefsRefresh('openai-key-change', window.document)"
-        />
-    </vbox>
-
-    <!-- Model -->
-    <vbox>
-        <html:label data-l10n-id="pref-openai-model"
-                    for="openai-model">
-        </html:label>
-        <menulist id="openai-model"
-                  preference="__prefsPrefix__.openai.model"
-                  oncommand="Zotero.__addonInstance__.hooks.onPrefsRefresh('openai-model-change', window.document)">
-            <menupopup id="openai-model-popup">
-                <menuitem label="tts-1 (Standard)" value="tts-1"/>
-                <menuitem label="tts-1-hd (High Definition)" value="tts-1-hd"/>
-            </menupopup>
-        </menulist>
-    </vbox>
-
-    <!-- Voice -->
-    <vbox>
-        <html:label data-l10n-id="pref-openai-voice"
-                    for="openai-voice">
-        </html:label>
-        <menulist id="openai-voice"
-                  preference="__prefsPrefix__.openai.voice"
-                  oncommand="Zotero.__addonInstance__.hooks.onPrefsRefresh('openai-voice-change', window.document)">
-            <menupopup id="openai-voice-popup">
-                <menuitem label="Alloy" value="alloy"/>
-                <menuitem label="Ash" value="ash"/>
-                <menuitem label="Coral" value="coral"/>
-                <menuitem label="Echo" value="echo"/>
-                <menuitem label="Fable" value="fable"/>
-                <menuitem label="Nova" value="nova"/>
-                <menuitem label="Onyx" value="onyx"/>
-                <menuitem label="Sage" value="sage"/>
-                <menuitem label="Shimmer" value="shimmer"/>
-            </menupopup>
-        </menulist>
-    </vbox>
-
-    <!-- Volume -->
-    <vbox>
-        <hbox align="center">
-            <html:label data-l10n-id="pref-openai-volume"
-                        for="openai-volume">
-            </html:label>
-            <html:input preference="__prefsPrefix__.openai.volume"
-                        readonly="true"
-                        value="100"
-                        style="width:30px"
-            />
-        </hbox>
-        <html:input type="range"
-                    id="openai-volume"
-                    min="0"
-                    max="100"
-                    value="100"
-                    preference="__prefsPrefix__.openai.volume"
-                    style="width:50%"
-        />
-    </vbox>
-
-    <!-- Rate -->
-    <vbox>
-        <hbox align="center">
-            <html:label data-l10n-id="pref-openai-rate"
-                        for="openai-rate">
-            </html:label>
-            <html:input preference="__prefsPrefix__.openai.rate"
-                        readonly="true"
-                        value="100"
-                        style="width:30px"
-            />
-        </hbox>
-        <html:input type="range"
-                    id="openai-rate"
-                    min="25"
-                    max="400"
-                    value="100"
-                    preference="__prefsPrefix__.openai.rate"
-                    style="width:50%"
-        />
-    </vbox>
-
-    <!-- Test Text Input -->
-    <vbox>
-        <html:label data-l10n-id="pref-openai-testText"
-                    for="openai-testText">
-        </html:label>
-        <html:input id="openai-testText"
-                    type="text"
-        />
-    </vbox>
-
-    <!-- Test Voice Button -->
-    <html:button id="openai-testVoice-btn"
-                 onclick="Zotero.__addonInstance__.hooks.onSpeakTest('openai', window.document.getElementById('openai-testText').value)"
-                 data-l10n-id="pref-openai-testVoice">
     </html:button>
 
 </vbox>
