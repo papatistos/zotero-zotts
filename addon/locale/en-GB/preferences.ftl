@@ -17,6 +17,8 @@ pref-general-engine-azure =
     .label = Azure Speech
 pref-general-engine-openai =
     .label = OpenAI Speech
+pref-general-engine-local =
+    .label = Local TTS (OpenAI-compatible)
 
 # === TTS General
 pref-status-unknown =
@@ -59,6 +61,16 @@ pref-openai-volume = Volume
 pref-openai-rate = Rate
 pref-openai-testText = Test sentence:
 pref-openai-testVoice = Test Voice
+
+# === Local Speech
+pref-sect-local = Local TTS (OpenAI-compatible)
+
+pref-local-apiUrl = API URL
+pref-local-voice = Voice
+pref-local-volume = Volume
+pref-local-rate = Rate
+pref-local-testText = Test sentence:
+pref-local-testVoice = Test Voice
 
 # === Ignore Annotations
 pref-sect-ignoreAnnotations = Ignore Annotations

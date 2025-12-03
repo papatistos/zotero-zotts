@@ -52,6 +52,9 @@
             <radio id="engine-openai"
                    data-l10n-id="pref-general-engine-openai"
                    value="openai"/>
+            <radio id="engine-local"
+                   data-l10n-id="pref-general-engine-local"
+                   value="local"/>
         </radiogroup>
     </html:div>
 </vbox>
@@ -396,6 +399,103 @@
     <html:button id="openai-testVoice-btn"
                  onclick="Zotero.__addonInstance__.hooks.onSpeakTest('openai', window.document.getElementById('openai-testText').value)"
                  data-l10n-id="pref-openai-testVoice">
+    </html:button>
+
+</vbox>
+
+<!-- Local Speech Settings -->
+<vbox class="main-section" 
+      id="__addonRef__-local">
+    <label id="__addonRef__-local-header">
+        <html:h1 data-l10n-id="pref-sect-local"></html:h1>
+    </label>
+    <html:p id="local-status"
+            data-l10n-id="pref-status-unknown"
+            style="text-align:center; color:tomato !important; font-weight:bold;">
+    </html:p>
+
+    <!-- API URL -->
+    <vbox>
+        <html:label data-l10n-id="pref-local-apiUrl"
+                    for="local-apiUrl">
+        </html:label>
+        <html:input id="local-apiUrl"
+                    type="text"
+                    preference="__prefsPrefix__.local.apiUrl"
+                    onchange="Zotero.__addonInstance__.hooks.onPrefsRefresh('local-apiUrl-change', window.document)"
+        />
+    </vbox>
+
+    <!-- Voice -->
+    <vbox>
+        <html:label data-l10n-id="pref-local-voice"
+                    for="local-voice">
+        </html:label>
+        <html:input id="local-voice"
+                    type="text"
+                    preference="__prefsPrefix__.local.voice"
+                    onchange="Zotero.__addonInstance__.hooks.onPrefsRefresh('local-voice-change', window.document)"
+        />
+    </vbox>
+
+    <!-- Volume -->
+    <vbox>
+        <hbox align="center">
+            <html:label data-l10n-id="pref-local-volume"
+                        for="local-volume">
+            </html:label>
+            <html:input preference="__prefsPrefix__.local.volume"
+                        readonly="true"
+                        value="100"
+                        style="width:30px"
+            />
+        </hbox>
+        <html:input type="range"
+                    id="local-volume"
+                    min="0"
+                    max="100"
+                    value="100"
+                    preference="__prefsPrefix__.local.volume"
+                    style="width:50%"
+        />
+    </vbox>
+
+    <!-- Rate -->
+    <vbox>
+        <hbox align="center">
+            <html:label data-l10n-id="pref-local-rate"
+                        for="local-rate">
+            </html:label>
+            <html:input preference="__prefsPrefix__.local.rate"
+                        readonly="true"
+                        value="100"
+                        style="width:30px"
+            />
+        </hbox>
+        <html:input type="range"
+                    id="local-rate"
+                    min="25"
+                    max="400"
+                    value="100"
+                    preference="__prefsPrefix__.local.rate"
+                    style="width:50%"
+        />
+    </vbox>
+
+    <!-- Test Text Input -->
+    <vbox>
+        <html:label data-l10n-id="pref-local-testText"
+                    for="local-testText">
+        </html:label>
+        <html:input id="local-testText"
+                    type="text"
+        />
+    </vbox>
+
+    <!-- Test Voice Button -->
+    <html:button id="local-testVoice-btn"
+                 onclick="Zotero.__addonInstance__.hooks.onSpeakTest('local', window.document.getElementById('local-testText').value)"
+                 data-l10n-id="pref-local-testVoice">
     </html:button>
 
 </vbox>

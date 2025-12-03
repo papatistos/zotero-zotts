@@ -4,6 +4,7 @@ ttsEngine-engineName = { $engine ->
     [webSpeech] Web Speech
     [azure] Azure Speech
     [openai] OpenAI Speech
+    [local] Local TTS
     *[other] Unknown Engine
 }
 
@@ -38,6 +39,14 @@ ttsEngine-errorCause = { $engine ->
         [api-error] OpenAI API returned an error
         *[other] Unknown Error
     }
+    [local] { $cause ->
+        [config-incomplete] API URL not configured (enter it in preferences)
+        [auth-failed] Authentication failed (check API credentials)
+        [connection-failed] Failed to connect to local TTS service
+        [rate-limited] Rate limit exceeded (wait and try again)
+        [api-error] Local API returned an error
+        *[other] Unknown Error
+    }
 }
 
 ttsEngine-settingsFormatted = { $engine ->
@@ -55,6 +64,11 @@ ttsEngine-settingsFormatted = { $engine ->
         Rate: { $rate }
     [openai]
         Model: { $model },
+        Voice: { $voice },
+        Volume: { $volume },
+        Rate: { $rate }
+    [local]
+        API URL: { $apiUrl },
         Voice: { $voice },
         Volume: { $volume },
         Rate: { $rate }

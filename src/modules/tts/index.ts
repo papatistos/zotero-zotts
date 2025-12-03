@@ -111,6 +111,40 @@ async function initEngines(addon: Addon) {
       }
     )
 
+    let localPromise = import("./local").then(
+      (e) => {
+          e.setDefaultPrefs()
+
+          addon.data.tts.engines["local"] = {
+              status: "loading",
+              speak: e.speak,
+              stop: e.stop,
+              canPause: true,
+              pause: e.pause,
+              resume: e.resume,
+              skipBackward: e.skipBackward,
+              skipForward: e.skipForward,
+              replaySection: e.replaySection,
+              extras: {
+                  getVoices: e.getVoices,
+                  dispose: e.dispose
+              }
+          }
+
+          return e
+      }
+    ).then(
+      async (e) => {
+          await e.initEngine()
+          addon.data.tts.engines["local"].status = "ready"
+      }
+    ).catch(
+      (e) => {
+          addon.data.tts.engines["local"].errorMsg = e
+          addon.data.tts.engines["local"].status = "error"
+      }
+    )
+
     // TODO: future - implement more engines
     //   Google?
     //   OS native (macOS, Windows, Linux) but not WSA?
@@ -121,6 +155,7 @@ async function initEngines(addon: Addon) {
             wsaPromise,
             azurePromise,
             openaiPromise,
+            localPromise,
         ])
         addon.data.tts.status = "ready"
     } catch {
