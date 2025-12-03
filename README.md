@@ -9,6 +9,7 @@ ZoTTS is a Zotero plugin to add TTS functionality
 >
 > This version adds
 > - support for OpenAI's TTS engine,
+> - support for a local TTS engine via an OpenAI-compatible API (e.g. Kokoro TTS via [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI))
 > - buttons to skip 10s forward or backwards and to replay the current selection, 
 > - a cache for the current text selection (to avoid unnecessary API calls for such skipping or replaying),
 > - an option to ignore certain text parts (e.g. page numbers in headers/footers) by marking them with annotations of a specific color (default: grey).
