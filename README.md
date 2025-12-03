@@ -5,7 +5,13 @@ ZoTTS is a Zotero plugin to add TTS functionality
 [![Using Zotero Plugin Template](https://img.shields.io/badge/Using-Zotero%20Plugin%20Template-blue?style=flat-square&logo=github)](https://github.com/windingwind/zotero-plugin-template)
 
 > [!NOTE]
-> This is a fork of [the original repository](https://github.com/ImperialSquid/zotero-zotts/) (via https://github.com/KanaHayama/zotero-zotts). It was created to add support for OpenAI's TTS engine. While I was at it, I also added buttons to skip 10s forward or backwards and to replay the current selection. To avoid unnecessary API calls for such skipping, I also added a cache for the current text selection.
+> This is a fork of [the original repository](https://github.com/ImperialSquid/zotero-zotts/) (via https://github.com/KanaHayama/zotero-zotts). 
+>
+> This version adds
+> - support for OpenAI's TTS engine,
+> - buttons to skip 10s forward or backwards and to replay the current selection, 
+> - a cache for the current text selection (to avoid unnecessary API calls for such skipping or replaying),
+> - an option to ignore certain text parts (e.g. page numbers in headers/footers) by marking them with annotations of a specific color (default: grey).
 
 ## Install :rocket:
 
