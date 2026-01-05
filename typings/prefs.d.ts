@@ -21,6 +21,7 @@ declare namespace _ZoteroTypes {
       "azure.voice": string;
       "azure.volume": number;
       "azure.rate": number;
+      "azure.minSegmentSize": number;
       "openai.apiKey": string;
       "openai.model": string;
       "openai.voice": string;

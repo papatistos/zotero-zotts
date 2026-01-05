@@ -12,6 +12,7 @@ pref("__prefsPrefix__.azure.language", "en-US");
 pref("__prefsPrefix__.azure.voice", "");
 pref("__prefsPrefix__.azure.volume", 100);
 pref("__prefsPrefix__.azure.rate", 100);
+pref("__prefsPrefix__.azure.minSegmentSize", 8);
 pref("__prefsPrefix__.openai.apiKey", "");
 pref("__prefsPrefix__.openai.model", "tts-1");
 pref("__prefsPrefix__.openai.voice", "alloy");
