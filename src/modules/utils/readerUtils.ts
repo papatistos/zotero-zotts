@@ -267,10 +267,13 @@ export function getSelectedText(reader: ReaderInstance) {
     return removeIgnoredText(text, reader)
 }
 
-export async function getSelectedTextToEnd(reader: ReaderInstance) {
+export async function getSelectedTextToEnd(
+    reader: ReaderInstance,
+    selectionAnnotation?: Pick<AnnotationJson, "position"> | null
+) {
     const selected = getSelectedText(reader)
 
-    if (selected === "") {
+    if (selected.trim() === "") {
         // cannot "read from here" without a here to read from
         notifyGeneric(
           [getString("popup-SFH-noSelection")],
@@ -357,9 +360,41 @@ export async function getSelectedTextToEnd(reader: ReaderInstance) {
         return ""
     }
 
-    // recombine separator with "from here" and return
-    let result = selected + parts[1]
-    return removeIgnoredText(result, reader)
+    const prefixLengths = [240, 160, 120, 80, 40]
+    let sawNonUniquePrefix = false
+
+    for (const prefixLength of prefixLengths) {
+        const prefix = getPrefixCandidate(selected, prefixLength)
+        if (prefix.length < 20) {
+            continue
+        }
+
+        const prefixMatch = findUniqueMatchStart(full, prefix)
+        if (!prefixMatch) {
+            continue
+        }
+
+        if (prefixMatch.unique) {
+            return removeIgnoredText(full.slice(prefixMatch.index), reader)
+        }
+
+        sawNonUniquePrefix = true
+    }
+
+    notifyGeneric(
+      sawNonUniquePrefix
+        ? [
+            getString("popup-SFH-nonspecificSelection1"),
+            getString("popup-SFH-nonspecificSelection2")
+        ]
+        : [
+            getString("popup-SFH-unknownSelection1"),
+            getString("popup-SFH-unknownSelection2")
+        ],
+      "info"
+    )
+
+    return ""
 }
 
 export async function getFullText(reader: ReaderInstance) {
