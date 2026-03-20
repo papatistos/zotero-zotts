@@ -426,6 +426,18 @@
         />
     </vbox>
 
+    <!-- Model -->
+    <vbox>
+        <html:label data-l10n-id="pref-local-model"
+                    for="local-model">
+        </html:label>
+        <html:input id="local-model"
+                    type="text"
+                    preference="__prefsPrefix__.local.model"
+                    onchange="Zotero.__addonInstance__.hooks.onPrefsRefresh('local-model-change', window.document)"
+        />
+    </vbox>
+
     <!-- Voice -->
     <vbox>
         <html:label data-l10n-id="pref-local-voice"

@@ -40,6 +40,10 @@ function setDefaultPrefs(): void {
         setPref("local.apiUrl", "http://localhost:8880");
     }
 
+    if (!getPref("local.model")) {
+        setPref("local.model", "model");
+    }
+
     if (!getPref("local.voice")) {
         setPref("local.voice", "bm_fable");
     }
@@ -496,7 +500,7 @@ class LocalSynthesizer {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    model: "tts-1",
+                    model: (getPref("local.model") as string) || "model",
                     input: sectionText,
                     voice: voice,
                     response_format: "mp3",
