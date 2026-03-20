@@ -9,10 +9,12 @@ ZoTTS is a Zotero plugin to add TTS functionality
 >
 > This version adds
 > - support for OpenAI's TTS engine,
-> - support for a local TTS engine via an OpenAI-compatible API (e.g. Kokoro TTS via [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI))
+> - support for a local TTS engine via an OpenAI-compatible API,
+> - a dedicated Kokoro TTS engine for kokoro-web / [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI) with dynamic language, model and voice loading,
 > - buttons to skip 10s forward or backwards and to replay the current selection, 
 > - a cache for the current text selection (to avoid unnecessary API calls for such skipping or replaying),
-> - an option to ignore certain text parts (e.g. page numbers in headers/footers) by marking them with annotations of a specific color (default: grey).
+> - an option to ignore certain text parts (e.g. page numbers in headers/footers) by marking them with annotations of a specific color (default: grey),
+> - a short queued-speech cue for delayed Kokoro synthesis requests.
 
 ## Install :rocket:
 
@@ -55,7 +57,7 @@ In the Library tab, right clicking an item will bring up a context menu, you can
 
 ![](docs/resources/right-click-buttons.png)
 
-In Reader tabs there's also buttons for playing/pausing/cancelling in the top right, as well as skipping forward/backward and replaying the last segment (note that skip/replay controls currently only work with the OpenAI engine). These will act the same as using the speak/pause/cancel shortcuts in terms of speaking selected text/annotations/full text.
+In Reader tabs there's also buttons for playing/pausing/cancelling in the top right, as well as skipping forward/backward and replaying the last segment. Skip/replay currently work with the OpenAI, Local and Kokoro engines. These will act the same as using the speak/pause/cancel shortcuts in terms of speaking selected text/annotations/full text.
 
 (Note that doing this ignores whatever Shift Modifier settings you have, and whether you're holding shift when the button is clicked).
 
@@ -70,8 +72,10 @@ In the preferences you can:
 - **Enable/disable queueing**
   - If you want to speak a new item, should ZoTTS add it to a queue, or cancel the current item and speak the new one?
 - **Adjust the current voice and related settings**
-  - Voices used are the ones built in to your computer (WebSpeech), Azure TTS, or OpenAI TTS
-  - You can also adjust the rate/pitch/volume
+  - Voices used are the ones built in to your computer (WebSpeech), Azure TTS, OpenAI TTS, the Local OpenAI-compatible engine, or the dedicated Kokoro engine
+  - The Local engine now also exposes a model field
+  - The Kokoro engine can auto-detect the API base URL and populate available languages, models and voices from the server
+  - You can also adjust the rate/pitch/volume where supported
 - **Tweak shortcuts**
   - Rebind the speak, pause and cancel shortcuts to use other letters
   - Change what happens when you're holding `Ctrl/Cmd` vs `Ctrl/Cmd + Shift`
@@ -82,6 +86,8 @@ In the preferences you can:
    - Create a set of favourites with specific voices and other settings
    - You can quickly cycle between favourites with the shortcut
    - Especially useful for users who might read in multiple languages
+
+When using the Kokoro engine, ZoTTS also plays a short cue as soon as a request is sent so you get immediate feedback while the audio is being synthesized.
 
 ## Contributing :wrench:
 ### Code and Translations :computer:
