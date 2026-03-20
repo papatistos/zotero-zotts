@@ -11,6 +11,71 @@ let lastAzureRegion: string = "";
 // OpenAI cache
 let lastOpenAIKey: string = "";
 
+// Kokoro caches (in-memory, cleared on reload)
+let kokoroModelsCache: any[] | null = null;
+let kokoroVoicesCache: any[] | null = null;
+let kokoroLangsCache: any[] | null = null;
+let kokoroResolvedBaseUrl: string | null = null;
+let lastKokoroApiUrl: string = "";
+let kokoroFetchGeneration = 0;
+
+// Kokoro API fetch helpers (standalone — no dependency on engine module loading)
+async function kokoroFetchJson(url: string): Promise<any[]> {
+    try {
+        const response = await fetch(url, {
+            method: "GET",
+            headers: { "Accept": "application/json" },
+        });
+        if (!response.ok) return [];
+        const data: any = await response.json();
+        return Array.isArray(data) ? data : (data.data || data.models || data.voices || data.langs || data.languages || []);
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Auto-detect the correct API base URL by probing known path patterns.
+ * User enters just the host (e.g. http://kokoro-web.local) and we find
+ * whether the API lives at /api/v1, /v1, or root.
+ */
+async function kokoroResolveBaseUrl(userUrl: string): Promise<string | null> {
+    // Strip trailing slashes
+    const base = userUrl.replace(/\/+$/, "");
+    const withoutV1 = base.replace(/\/v1$/, "");
+
+    // Probe both common base forms:
+    //   host          -> host/v1/audio/...
+    //   host/api      -> host/api/v1/audio/...
+    // This also accepts pasted API URLs like host/api/v1 by normalizing the
+    // trailing /v1 before probing.
+    const candidates = Array.from(new Set([
+        withoutV1,
+        withoutV1.endsWith("/api") ? withoutV1.slice(0, -4) : `${withoutV1}/api`,
+    ].filter((candidate) => candidate.length > 0)));
+
+    for (const candidate of candidates) {
+        try {
+            const response = await fetch(`${candidate}/v1/audio/voices`, {
+                method: "GET",
+                headers: { "Accept": "application/json" },
+            });
+            if (response.ok) {
+                const data = await response.json();
+                if (Array.isArray(data) && data.length > 0) {
+                    ztoolkit.log(`Kokoro API resolved: ${candidate}`);
+                    return candidate;
+                }
+            }
+        } catch {
+            // try next candidate
+        }
+    }
+
+    ztoolkit.log(`Kokoro API: no valid endpoint found for ${base}`);
+    return null;
+}
+
 // Lazy-load config functions to avoid loading heavy modules on startup
 async function getAzureConfigLazy(): Promise<{ key: string; region: string }> {
     const azureModule = addon.data.tts.engines["azure"]?.extras;
@@ -120,6 +185,15 @@ function prefsLoadHook(type: string, doc: Document) {
     // Initialize OpenAI controls
     updateOpenAIControls(doc);
 
+    // set default test text for Kokoro
+    const kokoroTestText = doc.getElementById("kokoro-testText") as HTMLInputElement;
+    if (kokoroTestText) {
+        kokoroTestText.value = getString("speak-testVoice");
+    }
+
+    // Initialize Kokoro controls
+    updateKokoroControls(doc);
+
     // do refresh to set warning if needed
     prefsRefreshHook("load", doc)
 }
@@ -146,6 +220,12 @@ function prefsRefreshHook(type: string, doc: Document) {
     } else if (type === "openai-key-change") {
         handleOpenAIKeyChange(doc)
     } else if (type === "openai-model-change" || type === "openai-voice-change") {
+        updateTestVoiceButtons(doc)
+    } else if (type === "kokoro-apiUrl-change") {
+        handleKokoroApiUrlChange(doc)
+    } else if (type === "kokoro-language-change") {
+        handleKokoroLanguageChange(doc)
+    } else if (type === "kokoro-model-change" || type === "kokoro-voice-change") {
         updateTestVoiceButtons(doc)
     } else if (type === "subs-text") {
         setSubsTextareaWarning(doc)
@@ -214,9 +294,12 @@ function updateTTSEngineStatuses(doc: Document) {
 function updateTestVoiceButtons(doc: Document): void {
     // Update Azure Test Voice button (async)
     updateAzureTestVoiceButton(doc);
-    
+
     // Update OpenAI Test Voice button (async)
     updateOpenAITestVoiceButton(doc);
+
+    // Update Kokoro Test Voice button
+    updateKokoroTestVoiceButton(doc);
 }
 
 async function updateAzureTestVoiceButton(doc: Document): Promise<void> {
@@ -545,6 +628,330 @@ function unlockOpenAIControls(doc: Document): void {
 
     // Update Test Voice button state based on current values
     updateTestVoiceButtons(doc);
+}
+
+// ============================================================================
+// Kokoro control management functions
+// ============================================================================
+
+function handleKokoroApiUrlChange(doc: Document): void {
+    const apiUrlInput = doc.getElementById("kokoro-apiUrl") as HTMLInputElement;
+    const currentUrl = (apiUrlInput?.value || "").trim();
+
+    lastKokoroApiUrl = currentUrl;
+
+    // Clear all caches including resolved base URL
+    kokoroModelsCache = null;
+    kokoroVoicesCache = null;
+    kokoroLangsCache = null;
+    kokoroResolvedBaseUrl = null;
+
+    updateKokoroControls(doc);
+}
+
+function updateKokoroControls(doc: Document): void {
+    const userUrl = getKokoroApiUrlFromUI(doc);
+    const fetchGeneration = ++kokoroFetchGeneration;
+    lastKokoroApiUrl = userUrl;
+
+    if (!userUrl) {
+        lockKokoroControls(doc);
+        return;
+    }
+
+    // If we have caches, use them
+    if (kokoroModelsCache && kokoroVoicesCache && kokoroLangsCache) {
+        unlockKokoroControls(doc);
+        populateKokoroLanguages(doc, kokoroLangsCache, kokoroVoicesCache);
+        populateKokoroModels(doc, kokoroModelsCache);
+        const currentLang = getPref("kokoro.language") as string;
+        populateKokoroVoices(doc, kokoroVoicesCache, currentLang);
+        updateTestVoiceButtons(doc);
+        return;
+    }
+
+    // Lock controls while probing/fetching
+    lockKokoroControls(doc);
+
+    // Auto-detect API base URL, then fetch all endpoints
+    (async () => {
+        // Resolve the base URL (probe known path patterns)
+        const baseUrl = kokoroResolvedBaseUrl || await kokoroResolveBaseUrl(userUrl);
+        if (fetchGeneration !== kokoroFetchGeneration) {
+            return;
+        }
+        if (!baseUrl) {
+            ztoolkit.log("Kokoro API: could not find API at " + userUrl);
+            lockKokoroControls(doc);
+            return;
+        }
+
+        kokoroResolvedBaseUrl = baseUrl;
+
+        // Save the resolved base URL to the pref so the engine uses it for speech
+        setPref("kokoro.apiUrl", baseUrl);
+
+        const [models, voices, langs] = await Promise.all([
+            kokoroFetchJson(`${baseUrl}/v1/audio/models`),
+            kokoroFetchJson(`${baseUrl}/v1/audio/voices`),
+            kokoroFetchJson(`${baseUrl}/v1/audio/langs`),
+        ]);
+
+        if (fetchGeneration !== kokoroFetchGeneration) {
+            return;
+        }
+
+        if (models.length > 0) kokoroModelsCache = models;
+        if (voices.length > 0) kokoroVoicesCache = voices;
+        if (langs.length > 0) kokoroLangsCache = langs;
+
+        if (kokoroVoicesCache) {
+            unlockKokoroControls(doc);
+            populateKokoroLanguages(doc, kokoroLangsCache || [], kokoroVoicesCache);
+            if (kokoroModelsCache) {
+                populateKokoroModels(doc, kokoroModelsCache);
+            }
+            const currentLang = getPref("kokoro.language") as string;
+            populateKokoroVoices(doc, kokoroVoicesCache, currentLang);
+            updateTestVoiceButtons(doc);
+        } else {
+            ztoolkit.log("Kokoro API: no voices returned from " + baseUrl);
+            lockKokoroControls(doc);
+        }
+    })().catch((error: any) => {
+        if (fetchGeneration !== kokoroFetchGeneration) {
+            return;
+        }
+        ztoolkit.log(`Kokoro API fetch error: ${error}`);
+        lockKokoroControls(doc);
+    });
+}
+
+function getKokoroApiUrlFromUI(doc: Document): string {
+    const apiUrlInput = doc.getElementById("kokoro-apiUrl") as HTMLInputElement;
+    const uiUrl = (apiUrlInput?.value || "").trim();
+    return uiUrl || (getPref("kokoro.apiUrl") as string || "").trim();
+}
+
+function populateKokoroLanguages(doc: Document, langs: any[], voices: any[]): void {
+    const languageMenu = doc.getElementById("kokoro-language") as unknown as XULMenuListElement;
+    const languagePopup = doc.getElementById("kokoro-language-popup");
+
+    if (!languageMenu || !languagePopup) return;
+
+    // Build language entries as {id, name} pairs
+    // API returns: [{id: "en-us", name: "English (US)"}, ...]
+    let langEntries: { id: string; name: string }[] = [];
+
+    if (langs && langs.length > 0) {
+        langEntries = langs.map((l: any) => {
+            if (typeof l === "string") return { id: l, name: l };
+            return { id: l.id || l.code || String(l), name: l.name || l.id || String(l) };
+        });
+    } else if (voices && voices.length > 0) {
+        // Fallback: extract unique languages from voice metadata
+        const seen = new Set<string>();
+        voices.forEach((v: any) => {
+            const lang = v.lang || v.language;
+            if (!lang) return;
+            const id = typeof lang === "object" ? (lang.id || String(lang)) : String(lang);
+            const name = typeof lang === "object" ? (lang.name || id) : id;
+            if (!seen.has(id)) {
+                seen.add(id);
+                langEntries.push({ id, name });
+            }
+        });
+    }
+
+    languagePopup.innerHTML = '';
+
+    // Add "All" option at the top
+    const allItem = doc.createXULElement("menuitem");
+    allItem.setAttribute("label", "All");
+    allItem.setAttribute("value", "");
+    languagePopup.appendChild(allItem);
+
+    langEntries.forEach((lang) => {
+        const item = doc.createXULElement("menuitem");
+        item.setAttribute("label", lang.name);
+        item.setAttribute("value", lang.id);
+        languagePopup.appendChild(item);
+    });
+
+    const currentLang = getPref("kokoro.language") as string;
+    const langIds = langEntries.map((l) => l.id);
+    if (currentLang && langIds.includes(currentLang)) {
+        languageMenu.value = currentLang;
+    } else {
+        // Default to "All"
+        languageMenu.value = "";
+    }
+}
+
+function populateKokoroModels(doc: Document, models: any[]): void {
+    const modelMenu = doc.getElementById("kokoro-model") as unknown as XULMenuListElement;
+    const modelPopup = doc.getElementById("kokoro-model-popup");
+
+    if (!modelMenu || !modelPopup) return;
+
+    modelPopup.innerHTML = '';
+
+    if (models.length === 0) {
+        // Add a default entry
+        const item = doc.createXULElement("menuitem");
+        item.setAttribute("label", "model (default)");
+        item.setAttribute("value", "model");
+        modelPopup.appendChild(item);
+    } else {
+        models.forEach((m: any) => {
+            const item = doc.createXULElement("menuitem");
+            let value: string;
+            let label: string;
+
+            if (typeof m === "string") {
+                value = m;
+                label = m;
+            } else {
+                value = m.id || m.name || m.model || String(m);
+                // Build descriptive label from available metadata
+                label = value;
+                const parts: string[] = [];
+                if (m.quantization) parts.push(m.quantization);
+                if (m.size) parts.push(m.size);
+                if (m.num_params) parts.push(m.num_params);
+                if (parts.length > 0) {
+                    label = `${value} (${parts.join(", ")})`;
+                }
+            }
+
+            item.setAttribute("label", label);
+            item.setAttribute("value", value);
+            modelPopup.appendChild(item);
+        });
+    }
+
+    const currentModel = getPref("kokoro.model") as string;
+    const modelValues = models.map((m: any) =>
+        typeof m === "string" ? m : (m.id || m.name || m.model || String(m))
+    );
+    if (currentModel && modelValues.includes(currentModel)) {
+        modelMenu.value = currentModel;
+    } else if (models.length > 0) {
+        modelMenu.selectedIndex = 0;
+    }
+}
+
+function populateKokoroVoices(doc: Document, voices: any[], languageFilter?: string): void {
+    const voiceMenu = doc.getElementById("kokoro-voice") as unknown as XULMenuListElement;
+    const voicePopup = doc.getElementById("kokoro-voice-popup");
+
+    if (!voiceMenu || !voicePopup) return;
+
+    // Filter voices by language if specified
+    // API voice format: {id, name, lang: {id, name}, gender, overallGrade, ...}
+    let filteredVoices = voices;
+    if (languageFilter) {
+        filteredVoices = voices.filter((v: any) => {
+            const lang = v.lang || v.language;
+            if (!lang) return false;
+            const langId = typeof lang === "object" ? (lang.id || "") : String(lang);
+            return langId === languageFilter;
+        });
+        // If filter yields nothing, show all
+        if (filteredVoices.length === 0) {
+            filteredVoices = voices;
+        }
+    }
+
+    voicePopup.innerHTML = '';
+
+    filteredVoices.forEach((v: any) => {
+        const item = doc.createXULElement("menuitem");
+        let value: string;
+        let label: string;
+
+        if (typeof v === "string") {
+            value = v;
+            label = v;
+        } else {
+            value = v.id || v.name || v.voice || String(v);
+            // Build descriptive label: "Name — Language — Gender — Grade"
+            const parts: string[] = [];
+            if (v.name) parts.push(v.name);
+            const lang = v.lang || v.language;
+            if (lang) {
+                const langName = typeof lang === "object" ? (lang.name || lang.id || "") : String(lang);
+                if (langName) parts.push(langName);
+            }
+            if (v.gender) parts.push(v.gender);
+            if (v.overallGrade) parts.push(v.overallGrade);
+            label = parts.length > 0 ? `${value} — ${parts.join(", ")}` : value;
+        }
+
+        item.setAttribute("label", label);
+        item.setAttribute("value", value);
+        voicePopup.appendChild(item);
+    });
+
+    const currentVoice = getPref("kokoro.voice") as string;
+    const voiceValues = filteredVoices.map((v: any) =>
+        typeof v === "string" ? v : (v.id || v.name || v.voice || String(v))
+    );
+    if (currentVoice && voiceValues.includes(currentVoice)) {
+        voiceMenu.value = currentVoice;
+    } else if (filteredVoices.length > 0) {
+        voiceMenu.selectedIndex = 0;
+    }
+}
+
+function handleKokoroLanguageChange(doc: Document): void {
+    const languageMenu = doc.getElementById("kokoro-language") as unknown as XULMenuListElement;
+    const language = languageMenu?.value || "";
+
+    if (kokoroVoicesCache) {
+        populateKokoroVoices(doc, kokoroVoicesCache, language);
+        updateTestVoiceButtons(doc);
+    }
+}
+
+function lockKokoroControls(doc: Document): void {
+    const languageMenu = doc.getElementById("kokoro-language") as unknown as XULMenuListElement;
+    const modelMenu = doc.getElementById("kokoro-model") as unknown as XULMenuListElement;
+    const voiceMenu = doc.getElementById("kokoro-voice") as unknown as XULMenuListElement;
+    const testVoiceBtn = doc.getElementById("kokoro-testVoice-btn") as HTMLButtonElement;
+
+    if (languageMenu) languageMenu.setAttribute("disabled", "true");
+    if (modelMenu) modelMenu.setAttribute("disabled", "true");
+    if (voiceMenu) voiceMenu.setAttribute("disabled", "true");
+    if (testVoiceBtn) testVoiceBtn.setAttribute("disabled", "true");
+}
+
+function unlockKokoroControls(doc: Document): void {
+    const languageMenu = doc.getElementById("kokoro-language") as unknown as XULMenuListElement;
+    const modelMenu = doc.getElementById("kokoro-model") as unknown as XULMenuListElement;
+    const voiceMenu = doc.getElementById("kokoro-voice") as unknown as XULMenuListElement;
+
+    if (languageMenu) languageMenu.removeAttribute("disabled");
+    if (modelMenu) modelMenu.removeAttribute("disabled");
+    if (voiceMenu) voiceMenu.removeAttribute("disabled");
+
+    updateTestVoiceButtons(doc);
+}
+
+function updateKokoroTestVoiceButton(doc: Document): void {
+    const kokoroBtn = doc.getElementById("kokoro-testVoice-btn") as HTMLButtonElement;
+    if (!kokoroBtn) return;
+
+    const apiUrl = getKokoroApiUrlFromUI(doc);
+    const voiceMenu = doc.getElementById("kokoro-voice") as unknown as XULMenuListElement;
+    const voice = (voiceMenu?.value || "").trim();
+    const voiceDisabled = voiceMenu?.hasAttribute("disabled");
+
+    if (apiUrl && voice && !voiceDisabled) {
+        kokoroBtn.removeAttribute("disabled");
+    } else {
+        kokoroBtn.setAttribute("disabled", "true");
+    }
 }
 
 function setSubsTextareaWarning (doc: Document){

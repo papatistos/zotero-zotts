@@ -19,6 +19,8 @@ pref-general-engine-openai =
     .label = OpenAI Speech
 pref-general-engine-local =
     .label = Local TTS (OpenAI-compatible)
+pref-general-engine-kokoro =
+    .label = Kokoro TTS
 
 # === TTS General
 pref-status-unknown =
@@ -66,11 +68,24 @@ pref-openai-testVoice = Test Voice
 pref-sect-local = Local TTS (OpenAI-compatible)
 
 pref-local-apiUrl = API URL
+pref-local-model = Model
 pref-local-voice = Voice
 pref-local-volume = Volume
 pref-local-rate = Rate
 pref-local-testText = Test sentence:
 pref-local-testVoice = Test Voice
+
+# === Kokoro TTS
+pref-sect-kokoro = Kokoro TTS
+
+pref-kokoro-apiUrl = API URL
+pref-kokoro-language = Language
+pref-kokoro-model = Model
+pref-kokoro-voice = Voice
+pref-kokoro-volume = Volume
+pref-kokoro-rate = Rate
+pref-kokoro-testText = Test sentence:
+pref-kokoro-testVoice = Test Voice
 
 # === Ignore Annotations
 pref-sect-ignoreAnnotations = Ignore Annotations

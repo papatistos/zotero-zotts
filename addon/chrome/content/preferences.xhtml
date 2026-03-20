@@ -55,6 +55,9 @@
             <radio id="engine-local"
                    data-l10n-id="pref-general-engine-local"
                    value="local"/>
+            <radio id="engine-kokoro"
+                   data-l10n-id="pref-general-engine-kokoro"
+                   value="kokoro"/>
         </radiogroup>
     </html:div>
 </vbox>
@@ -508,6 +511,133 @@
     <html:button id="local-testVoice-btn"
                  onclick="Zotero.__addonInstance__.hooks.onSpeakTest('local', window.document.getElementById('local-testText').value)"
                  data-l10n-id="pref-local-testVoice">
+    </html:button>
+
+</vbox>
+
+<!-- Kokoro TTS Settings -->
+<vbox class="main-section"
+      id="__addonRef__-kokoro">
+    <label id="__addonRef__-kokoro-header">
+        <html:h1 data-l10n-id="pref-sect-kokoro"></html:h1>
+    </label>
+    <html:p id="kokoro-status"
+            data-l10n-id="pref-status-unknown"
+            style="text-align:center; color:tomato !important; font-weight:bold;">
+    </html:p>
+
+    <!-- API URL -->
+    <vbox>
+        <html:label data-l10n-id="pref-kokoro-apiUrl"
+                    for="kokoro-apiUrl">
+        </html:label>
+        <html:input id="kokoro-apiUrl"
+                    type="text"
+                    preference="__prefsPrefix__.kokoro.apiUrl"
+                    onchange="Zotero.__addonInstance__.hooks.onPrefsRefresh('kokoro-apiUrl-change', window.document)"
+        />
+    </vbox>
+
+    <!-- Language -->
+    <vbox>
+        <html:label data-l10n-id="pref-kokoro-language"
+                    for="kokoro-language">
+        </html:label>
+        <menulist id="kokoro-language"
+                  preference="__prefsPrefix__.kokoro.language"
+                  oncommand="Zotero.__addonInstance__.hooks.onPrefsRefresh('kokoro-language-change', window.document)">
+            <menupopup id="kokoro-language-popup">
+                <!-- populate at runtime -->
+            </menupopup>
+        </menulist>
+    </vbox>
+
+    <!-- Model -->
+    <vbox>
+        <html:label data-l10n-id="pref-kokoro-model"
+                    for="kokoro-model">
+        </html:label>
+        <menulist id="kokoro-model"
+                  preference="__prefsPrefix__.kokoro.model"
+                  oncommand="Zotero.__addonInstance__.hooks.onPrefsRefresh('kokoro-model-change', window.document)">
+            <menupopup id="kokoro-model-popup">
+                <!-- populate at runtime -->
+            </menupopup>
+        </menulist>
+    </vbox>
+
+    <!-- Voice -->
+    <vbox>
+        <html:label data-l10n-id="pref-kokoro-voice"
+                    for="kokoro-voice">
+        </html:label>
+        <menulist id="kokoro-voice"
+                  preference="__prefsPrefix__.kokoro.voice"
+                  oncommand="Zotero.__addonInstance__.hooks.onPrefsRefresh('kokoro-voice-change', window.document)">
+            <menupopup id="kokoro-voice-popup">
+                <!-- populate at runtime -->
+            </menupopup>
+        </menulist>
+    </vbox>
+
+    <!-- Volume -->
+    <vbox>
+        <hbox align="center">
+            <html:label data-l10n-id="pref-kokoro-volume"
+                        for="kokoro-volume">
+            </html:label>
+            <html:input preference="__prefsPrefix__.kokoro.volume"
+                        readonly="true"
+                        value="100"
+                        style="width:30px"
+            />
+        </hbox>
+        <html:input type="range"
+                    id="kokoro-volume"
+                    min="0"
+                    max="100"
+                    value="100"
+                    preference="__prefsPrefix__.kokoro.volume"
+                    style="width:50%"
+        />
+    </vbox>
+
+    <!-- Rate -->
+    <vbox>
+        <hbox align="center">
+            <html:label data-l10n-id="pref-kokoro-rate"
+                        for="kokoro-rate">
+            </html:label>
+            <html:input preference="__prefsPrefix__.kokoro.rate"
+                        readonly="true"
+                        value="100"
+                        style="width:30px"
+            />
+        </hbox>
+        <html:input type="range"
+                    id="kokoro-rate"
+                    min="25"
+                    max="400"
+                    value="100"
+                    preference="__prefsPrefix__.kokoro.rate"
+                    style="width:50%"
+        />
+    </vbox>
+
+    <!-- Test Text Input -->
+    <vbox>
+        <html:label data-l10n-id="pref-kokoro-testText"
+                    for="kokoro-testText">
+        </html:label>
+        <html:input id="kokoro-testText"
+                    type="text"
+        />
+    </vbox>
+
+    <!-- Test Voice Button -->
+    <html:button id="kokoro-testVoice-btn"
+                 onclick="Zotero.__addonInstance__.hooks.onSpeakTest('kokoro', window.document.getElementById('kokoro-testText').value)"
+                 data-l10n-id="pref-kokoro-testVoice">
     </html:button>
 
 </vbox>

@@ -26,6 +26,12 @@ declare namespace _ZoteroTypes {
       "openai.voice": string;
       "openai.volume": number;
       "openai.rate": number;
+      "kokoro.apiUrl": string;
+      "kokoro.model": string;
+      "kokoro.voice": string;
+      "kokoro.language": string;
+      "kokoro.volume": number;
+      "kokoro.rate": number;
       "shortcuts.speak": string;
       "shortcuts.pause": string;
       "shortcuts.cancel": string;
