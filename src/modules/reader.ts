@@ -80,7 +80,7 @@ export function registerReaderListeners() {
                     {
                         type: "click",
                         listener: async (e) => {
-                            addon.hooks.onSpeak(await getSelectedTextToEnd(reader))
+                            addon.hooks.onSpeak(await getSelectedTextToEnd(reader, params.annotation))
                         }
                     }
                 ],

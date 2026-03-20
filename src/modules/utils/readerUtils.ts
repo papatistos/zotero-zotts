@@ -280,24 +280,72 @@ export async function getSelectedTextToEnd(reader: ReaderInstance) {
         return ""
     }
 
+    const selectionPageIndex = selectionAnnotation?.position?.pageIndex
+    if (typeof selectionPageIndex === "number") {
+        const pdfText = await getSelectedTextToEndFromPdf(reader, selected, selectionPageIndex)
+        if (pdfText?.text) {
+            return removeIgnoredText(pdfText.text, reader)
+        }
+
+        if (pdfText?.ambiguous) {
+            notifyGeneric(
+              [
+                  getString("popup-SFH-nonspecificSelection1"),
+                  getString("popup-SFH-nonspecificSelection2")
+              ],
+              "info"
+            )
+
+            return ""
+        }
+    }
+
     const full = await getFullText(reader)
 
-    const parts = full.split(selected)
+    if (typeof selectionPageIndex === "number") {
+        const pageAnchoredMatch = findStartFromPage(full, selected, selectionPageIndex)
+        if (pageAnchoredMatch && pageAnchoredMatch.index >= 0) {
+            return removeIgnoredText(full.slice(pageAnchoredMatch.index), reader)
+        }
 
-    if (parts.length < 2) {
-        // "read from here" failed to find the selected text
+        if (pageAnchoredMatch?.ambiguous) {
+            notifyGeneric(
+              [
+                  getString("popup-SFH-nonspecificSelection1"),
+                  getString("popup-SFH-nonspecificSelection2")
+              ],
+              "info"
+            )
+
+            return ""
+        }
+    }
+
+    const exactParts = full.split(selected)
+
+    if (exactParts.length === 2) {
+        return removeIgnoredText(selected + exactParts[1], reader)
+    }
+
+    if (exactParts.length > 2) {
+        // cannot "read from here" without a more specific start point
         notifyGeneric(
           [
-              getString("popup-SFH-unknownSelection1"),
-              getString("popup-SFH-unknownSelection2")
+              getString("popup-SFH-nonspecificSelection1"),
+              getString("popup-SFH-nonspecificSelection2")
           ],
           "info"
         )
 
         return ""
     }
-    if (parts.length > 2) {
-        // cannot "read from here" without a more specific start point
+
+    const flexibleFullSelection = findUniqueMatchStart(full, selected)
+    if (flexibleFullSelection?.unique) {
+        return removeIgnoredText(full.slice(flexibleFullSelection.index), reader)
+    }
+
+    if (flexibleFullSelection && !flexibleFullSelection.unique) {
         notifyGeneric(
           [
               getString("popup-SFH-nonspecificSelection1"),
