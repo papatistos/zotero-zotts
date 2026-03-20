@@ -1,7 +1,243 @@
 import ReaderInstance = _ZoteroTypes.ReaderInstance;
+import AnnotationJson = _ZoteroTypes.Annotations.AnnotationJson;
 import { notifyGeneric } from "./notify";
 import { getString } from "./locale";
 import { getPref } from "./prefs";
+
+function escapeRegex(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function buildFlexibleWhitespaceRegex(text: string): RegExp | null {
+    const trimmed = text.trim()
+    if (!trimmed) {
+        return null
+    }
+
+    const pattern = escapeRegex(trimmed).replace(/\s+/g, "\\s+")
+    return new RegExp(pattern, "g")
+}
+
+function findUniqueMatchStart(haystack: string, needle: string): {
+    index: number
+    unique: boolean
+} | null {
+    const regex = buildFlexibleWhitespaceRegex(needle)
+    if (!regex) {
+        return null
+    }
+
+    const firstMatch = regex.exec(haystack)
+    if (!firstMatch) {
+        return null
+    }
+
+    const secondMatch = regex.exec(haystack)
+    return {
+        index: firstMatch.index,
+        unique: !secondMatch
+    }
+}
+
+function getPrefixCandidate(text: string, maxLength: number): string {
+    const trimmed = text.trim()
+    if (trimmed.length <= maxLength) {
+        return trimmed
+    }
+
+    let candidate = trimmed.slice(0, maxLength)
+    const lastWhitespace = candidate.search(/\s+\S*$/)
+    if (lastWhitespace > Math.floor(maxLength * 0.5)) {
+        candidate = candidate.slice(0, lastWhitespace)
+    }
+
+    return candidate.trim()
+}
+
+function splitTextIntoPages(text: string): Array<{ text: string; offset: number }> {
+    const pages: Array<{ text: string; offset: number }> = []
+    let start = 0
+
+    while (start <= text.length) {
+        const separatorIndex = text.indexOf("\f", start)
+        if (separatorIndex === -1) {
+            pages.push({ text: text.slice(start), offset: start })
+            break
+        }
+
+        pages.push({ text: text.slice(start, separatorIndex), offset: start })
+        start = separatorIndex + 1
+    }
+
+    return pages
+}
+
+function findStartInText(
+    text: string,
+    selected: string,
+): {
+    index: number
+    ambiguous: boolean
+} | null {
+    const exactMatch = findUniqueMatchStart(text, selected)
+    if (exactMatch?.unique) {
+        return {
+            index: exactMatch.index,
+            ambiguous: false
+        }
+    }
+
+    if (exactMatch && !exactMatch.unique) {
+        return {
+            index: -1,
+            ambiguous: true
+        }
+    }
+
+    const prefixLengths = [240, 160, 120, 80, 60, 40, 24, 16, 12, 8]
+    let sawAmbiguousMatch = false
+
+    for (const prefixLength of prefixLengths) {
+        const prefix = getPrefixCandidate(selected, prefixLength)
+        if (prefix.length < 8) {
+            continue
+        }
+
+        const match = findUniqueMatchStart(text, prefix)
+        if (!match) {
+            continue
+        }
+
+        if (match.unique) {
+            return {
+                index: match.index,
+                ambiguous: false
+            }
+        }
+
+        sawAmbiguousMatch = true
+    }
+
+    if (sawAmbiguousMatch) {
+        return {
+            index: -1,
+            ambiguous: true
+        }
+    }
+
+    return null
+}
+
+function findStartFromPage(
+    full: string,
+    selected: string,
+    pageIndex: number
+): {
+    index: number
+    ambiguous: boolean
+} | null {
+    const pages = splitTextIntoPages(full)
+    const page = pages[pageIndex]
+    if (!page) {
+        return null
+    }
+
+    const pageMatch = findStartInText(page.text, selected)
+    if (!pageMatch) {
+        return null
+    }
+
+    if (pageMatch.ambiguous) {
+        return {
+            index: -1,
+            ambiguous: true
+        }
+    }
+
+    return {
+        index: page.offset + pageMatch.index,
+        ambiguous: false
+    }
+}
+
+async function getReaderPdfDocument(reader: ReaderInstance): Promise<_ZoteroTypes.Reader.PDFDocumentProxy | null> {
+    if (reader.type !== "pdf") {
+        return null
+    }
+
+    const pdfView = reader._internalReader._primaryView as _ZoteroTypes.Reader.PDFView | undefined
+    if (!pdfView) {
+        return null
+    }
+
+    try {
+        await pdfView.initializedPromise
+    } catch (error) {
+        ztoolkit.log(`Reader PDF view initialization failed: ${error}`)
+        return null
+    }
+
+    return pdfView._iframeWindow?.PDFViewerApplication?.pdfDocument || null
+}
+
+async function getPdfPageText(
+    pdfDocument: _ZoteroTypes.Reader.PDFDocumentProxy,
+    pageIndex: number
+): Promise<string> {
+    const page = await pdfDocument.getPage(pageIndex + 1)
+    const textContent = await page.getTextContent()
+
+    return textContent.items
+        .map((item) => "str" in item ? item.str : "")
+        .join(" ")
+}
+
+async function getSelectedTextToEndFromPdf(
+    reader: ReaderInstance,
+    selected: string,
+    startPageIndex: number
+): Promise<{
+    text: string
+    ambiguous: boolean
+} | null> {
+    const pdfDocument = await getReaderPdfDocument(reader)
+    if (!pdfDocument) {
+        return null
+    }
+
+    try {
+        const startPageText = await getPdfPageText(pdfDocument, startPageIndex)
+        const startMatch = findStartInText(startPageText, selected)
+        if (!startMatch) {
+            return null
+        }
+
+        if (startMatch.ambiguous) {
+            return {
+                text: "",
+                ambiguous: true
+            }
+        }
+
+        const remainingPageIndexes = Array.from(
+            { length: Math.max(0, pdfDocument.numPages - startPageIndex - 1) },
+            (_, index) => startPageIndex + index + 1
+        )
+        const remainingPages = await Promise.all(
+            remainingPageIndexes.map((pageIndex) => getPdfPageText(pdfDocument, pageIndex))
+        )
+
+        return {
+            text: [startPageText.slice(startMatch.index), ...remainingPages]
+                .filter(Boolean)
+                .join("\n\n"),
+            ambiguous: false
+        }
+    } catch (error) {
+        ztoolkit.log(`Reader PDF text extraction failed: ${error}`)
+        return null
+    }
+}
 
 function removeIgnoredText(text: string, reader: ReaderInstance): string {
     // Remove text marked by annotations with the configured ignore color
