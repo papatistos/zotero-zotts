@@ -5,6 +5,7 @@ ttsEngine-engineName = { $engine ->
     [azure] Azure Speech
     [openai] OpenAI Speech
     [local] Local TTS
+    [kokoro] Kokoro TTS
     *[other] Unknown Engine
 }
 
@@ -47,6 +48,14 @@ ttsEngine-errorCause = { $engine ->
         [api-error] Local API returned an error
         *[other] Unknown Error
     }
+    [kokoro] { $cause ->
+        [config-incomplete] API URL not configured (enter it in preferences)
+        [auth-failed] Authentication failed (check API credentials)
+        [connection-failed] Failed to connect to Kokoro TTS service
+        [rate-limited] Rate limit exceeded (wait and try again)
+        [api-error] Kokoro API returned an error
+        *[other] Unknown Error
+    }
 }
 
 ttsEngine-settingsFormatted = { $engine ->
@@ -70,6 +79,13 @@ ttsEngine-settingsFormatted = { $engine ->
     [local]
         API URL: { $apiUrl },
         Voice: { $voice },
+        Volume: { $volume },
+        Rate: { $rate }
+    [kokoro]
+        API URL: { $apiUrl },
+        Model: { $model },
+        Voice: { $voice },
+        Language: { $language },
         Volume: { $volume },
         Rate: { $rate }
 }

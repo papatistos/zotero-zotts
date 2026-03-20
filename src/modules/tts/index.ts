@@ -145,6 +145,42 @@ async function initEngines(addon: Addon) {
       }
     )
 
+    let kokoroPromise = import("./kokoro").then(
+      (e) => {
+          e.setDefaultPrefs()
+
+          addon.data.tts.engines["kokoro"] = {
+              status: "loading",
+              speak: e.speak,
+              stop: e.stop,
+              canPause: true,
+              pause: e.pause,
+              resume: e.resume,
+              skipBackward: e.skipBackward,
+              skipForward: e.skipForward,
+              replaySection: e.replaySection,
+              extras: {
+                  fetchModels: e.fetchModels,
+                  fetchVoices: e.fetchVoices,
+                  fetchLangs: e.fetchLangs,
+                  dispose: e.dispose
+              }
+          }
+
+          return e
+      }
+    ).then(
+      async (e) => {
+          await e.initEngine()
+          addon.data.tts.engines["kokoro"].status = "ready"
+      }
+    ).catch(
+      (e) => {
+          addon.data.tts.engines["kokoro"].errorMsg = e
+          addon.data.tts.engines["kokoro"].status = "error"
+      }
+    )
+
     // TODO: future - implement more engines
     //   Google?
     //   OS native (macOS, Windows, Linux) but not WSA?
@@ -156,6 +192,7 @@ async function initEngines(addon: Addon) {
             azurePromise,
             openaiPromise,
             localPromise,
+            kokoroPromise,
         ])
         addon.data.tts.status = "ready"
     } catch {

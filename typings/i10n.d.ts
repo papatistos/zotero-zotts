@@ -39,6 +39,7 @@ export type FluentMessageId =
   | 'pref-faves-p1'
   | 'pref-faves-removeVoice'
   | 'pref-general-engine-azure'
+  | 'pref-general-engine-kokoro'
   | 'pref-general-engine-label'
   | 'pref-general-engine-local'
   | 'pref-general-engine-openai'
