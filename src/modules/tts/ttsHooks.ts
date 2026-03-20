@@ -12,8 +12,16 @@ import { notifyTTSStatus } from "../utils/notify";
 
 //   might be nice to reformat text into a better form, might have to be managed by each engine internally
 function speak(text: string) {
+    if (!text || text.trim() === "") {
+        return
+    }
+
     if (checkStatus()) {
         text = preprocessText(text)
+
+        if (!text.trim()) {
+            return
+        }
 
         addon.data.tts.engines[addon.data.tts.current].speak(text)
     } else {
