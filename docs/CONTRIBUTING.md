@@ -2,7 +2,7 @@ Thanks for expressing an interest in contributing to ZoTTS!
 
 # Setting up Your Environment
 1. Install [git](https://git-scm.com/) and [Node.js](https://nodejs.org/en/) if you haven't.
-2. Download Zotero 7 if you haven't, available [here](https://www.zotero.org/support/beta_builds)
+2. Download the latest Zotero release if you haven't, available [here](https://www.zotero.org/download/)
 3. This addon is based on the [windingwind](https://github.com/windingwind)'s excellent [zotero plugin template](https://github.com/windingwind/zotero-plugin-template). Familiarising yourself with its structure and tools will help you a lot.
 4. Clone and build a local version of the plugin:
 
