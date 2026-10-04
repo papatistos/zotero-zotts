@@ -1,9 +1,9 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {load,prefs}=require('./helpers.cjs');
-function harness(platform){
+function harness(platform,behavior="cancel"){
  const utterances=[];const addon={data:{tts:{state:'idle',engines:{webSpeech:{extras:{linuxQueue:[]}}}}}};
- const module=load('src/modules/tts/webspeech.ts',{'../utils/prefs':prefs({newItemBehaviour:'cancel','webSpeech.voice':'voice'}),'../utils/wait':{}},{addon,Zotero:{isMac:platform==='mac',isWin:platform==='win',isLinux:platform==='linux'},window:{SpeechSynthesisUtterance:class {},speechSynthesis:{getVoices:()=>[{name:'voice'}],cancel(){},speak:utt=>utterances.push(utt)}}});
+ const module=load('src/modules/tts/webspeech.ts',{'../utils/prefs':prefs({newItemBehaviour:behavior,'webSpeech.voice':'voice'}),'../utils/wait':{}},{addon,Zotero:{isMac:platform==='mac',isWin:platform==='win',isLinux:platform==='linux'},window:{SpeechSynthesisUtterance:class {},speechSynthesis:{getVoices:()=>[{name:'voice'}],cancel(){},speak:utt=>utterances.push(utt)}}});
  return {module,addon,utterances};
 }
 for(const platform of ['mac','win','linux']) {
@@ -16,3 +16,9 @@ for(const platform of ['mac','win','linux']) {
   current.onerror({error:'interrupted'});assert.equal(h.addon.data.tts.state,'idle');
  });
 }
+
+test('a finished queued utterance cannot cancel the next pending utterance',()=>{
+ const h=harness('mac','queue');h.module.speak('old');h.module.speak('new');
+ const [old,current]=h.utterances;old.onstart();old.onend();old.onerror({error:'canceled'});current.onstart();
+ assert.equal(h.addon.data.tts.state,'playing');
+});

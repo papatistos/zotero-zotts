@@ -210,14 +210,16 @@ function speakInternal(text: string) {
     utt.voice = getVoice(getPref("webSpeech.voice") as string)
 
     // manage reflecting state into addon
-    const isCurrent = () => sessionId === speechSessionId && activeUtterance === utt;
+    let settled = false;
+    const isCurrent = () => !settled && sessionId === speechSessionId && activeUtterance === utt;
     utt.onstart = () => {
-        if (sessionId !== speechSessionId) return;
+        if (settled || sessionId !== speechSessionId) return;
         activeUtterance = utt;
         addon.data.tts.state = "playing";
     }
     utt.onend = () => {
         if (!isCurrent()) return;
+        settled = true;
         activeUtterance = null;
         handleEnd();
     }
@@ -225,7 +227,8 @@ function speakInternal(text: string) {
     utt.onresume = () => { if (isCurrent()) addon.data.tts.state = "playing"; }
     utt.onerror = () => {
         // Some synthesis errors occur before onstart.
-        if (sessionId !== speechSessionId || (activeUtterance && activeUtterance !== utt)) return;
+        if (settled || sessionId !== speechSessionId || (activeUtterance && activeUtterance !== utt)) return;
+        settled = true;
         stop();
     }
 
