@@ -1,4 +1,4 @@
-import { ZoteroToolkit } from "zotero-plugin-toolkit"
+import { ZoTTSToolkit } from "./toolkit"
 import hooks from "./hooks"
 import { TTSEngine } from "./modules/tts";
 
@@ -8,7 +8,7 @@ class Addon {
     // Env type, see build.js
     env: "development" | "production"
     // ztoolkit: MyToolkit
-    ztoolkit: ZoteroToolkit
+    ztoolkit: ZoTTSToolkit
     locale?: {
       current: any
     }
@@ -40,7 +40,7 @@ class Addon {
       alive: true,
       env: __env__,
       // ztoolkit: new MyToolkit(),
-      ztoolkit: new ZoteroToolkit(),
+      ztoolkit: new ZoTTSToolkit(),
       ui: {
         toolbars: [],
         icons: {}
