@@ -79,14 +79,17 @@ function constructFav() {
 
     newFav["engine"] = (getPref("ttsEngine.current") as string)
 
-    // TODO: future - new engines need to reference required values here
-    switch (getPref("ttsEngine.current")) {
-        case "webSpeech":  // WSA
-            newFav["voice"] = (getPref("webSpeech.voice") as string)
-            newFav["pitch"] = (getPref("webSpeech.pitch") as number)
-            newFav["rate"] = (getPref("webSpeech.rate") as number)
-            newFav["volume"] = (getPref("webSpeech.volume") as number)
-            break
+    // Store voice settings, not cloud credentials.
+    const settings: Record<string, string[]> = {
+        webSpeech: ["voice", "pitch", "rate", "volume"],
+        azure: ["voice", "language", "rate", "volume", "minSegmentSize"],
+        openai: ["voice", "model", "rate", "volume"],
+        local: ["apiUrl", "voice", "model", "rate", "volume"],
+        kokoro: ["apiUrl", "voice", "model", "language", "rate", "volume"],
+    }
+    for (const key of settings[newFav["engine"] as string] ?? []) {
+        const value = getPref(`${newFav["engine"]}.${key}`)
+        if (value !== undefined) { newFav[key] = value }
     }
 
     return newFav
