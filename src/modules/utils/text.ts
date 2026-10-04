@@ -18,7 +18,7 @@ function universalPreprocess(text: string) {
     // however some TTS engines won't process this correctly, so we force re-normalise here
     text = text.normalize("NFC")
 
-    text.replaceAll(new RegExp("(\s)\s+", "g"), "$1")
+    text = text.replaceAll(/(\s)\s+/g, "$1")
 
     return text
 }
