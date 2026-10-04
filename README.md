@@ -90,13 +90,5 @@ In the preferences you can:
 When using the Kokoro engine, ZoTTS also plays a short cue as soon as a request is sent so you get immediate feedback while the audio is being synthesized.
 
 ## Contributing :wrench:
-### Code and Translations :computer:
-If you want to contribute bug fixes/features/etc or translate the plugin into another language, please refer to the [contribution guide](docs/CONTRIBUTING.md) for details on setting up your environment and places to start.
 
-### Funding :money_with_wings:
-If you want to support me financially, please follow this link: 
-
-[![Sponsor on GitHub](https://img.shields.io/badge/Sponsor_me-on_GitHub-violet?style=flat-square&logo=github
-)](https://github.com/sponsors/ImperialSquid/)
-
-Don't worry if you can't, ZoTTS is and always will be *absolutely free*. However, if you do want to send some money, I'd be very grateful!
+I made the changes to the plugin mainly for myself but am happy to share them with anyone who wants to use them. If you make further changes that you’d like to share, feel free to submit a PR. 
