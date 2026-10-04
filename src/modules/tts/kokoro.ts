@@ -169,6 +169,18 @@ class AudioPlayer {
     private isInitialized: boolean = false;
     private onComplete?: () => void;
     private currentBlobUrl: string | null = null;
+    private playbackId = 0;
+    private onError?: () => void;
+
+    public setOnErrorCallback(callback: () => void): void { this.onError = callback; }
+
+    private failPlayback(id: number, error: unknown): void {
+        if (id !== this.playbackId) return;
+        ztoolkit.log(`Audio playback error: ${error}`);
+        this.stop();
+        addon.data.tts.state = "idle";
+        this.onError?.();
+    }
 
     public async initialize(): Promise<void> {
         if (this.isInitialized) return;
@@ -182,6 +194,7 @@ class AudioPlayer {
     }
 
     public prepareForNewSection(): void {
+        this.stop();
         if (this.audioElement) {
             this.audioElement.pause();
             this.audioElement.currentTime = 0;
@@ -195,42 +208,30 @@ class AudioPlayer {
     }
 
     public async playAudio(audioBlob: Blob): Promise<void> {
+        const id = ++this.playbackId;
         if (!this.isInitialized) await this.initialize();
-
-        if (this.currentBlobUrl) {
-            URL.revokeObjectURL(this.currentBlobUrl);
-        }
-
-        this.isPlaying = true;
-        addon.data.tts.state = "playing";
-
+        if (id !== this.playbackId || !this.audioElement) return;
+        if (this.currentBlobUrl) URL.revokeObjectURL(this.currentBlobUrl);
         const url = URL.createObjectURL(audioBlob);
         this.currentBlobUrl = url;
-
-        if (this.audioElement) {
-            this.audioElement.src = url;
-            this.audioElement.volume = (getPref("kokoro.volume") as number) / 100;
-            // Speed is handled server-side via the API speed parameter
-            // (avoids pitch distortion from client-side playbackRate)
-
-            const playPromise = this.audioElement.play();
-            if (playPromise !== undefined) {
-                playPromise.catch((error) => {
-                    ztoolkit.log(`Audio playback error: ${error}`);
-                    this.isPlaying = false;
-                    URL.revokeObjectURL(url);
-                    this.currentBlobUrl = null;
-                });
-            }
-
-            this.audioElement.onended = () => {
-                URL.revokeObjectURL(url);
-                this.currentBlobUrl = null;
-                this.isPlaying = false;
-                if (this.onComplete) {
-                    this.onComplete();
-                }
-            };
+        const audio = this.audioElement;
+        audio.src = url;
+        audio.volume = (getPref("kokoro.volume") as number) / 100;
+        this.isPlaying = true;
+        this.isPaused = false;
+        addon.data.tts.state = "playing";
+        audio.onended = () => {
+            if (id !== this.playbackId) return;
+            URL.revokeObjectURL(url);
+            this.currentBlobUrl = null;
+            this.isPlaying = false;
+            this.onComplete?.();
+        };
+        audio.onerror = () => this.failPlayback(id, audio.error);
+        try {
+            await audio.play();
+        } catch (error) {
+            this.failPlayback(id, error);
         }
     }
 
@@ -243,10 +244,14 @@ class AudioPlayer {
     }
 
     public resume(): void {
-        if (this.audioElement && this.isPaused) {
-            this.audioElement.play();
-            this.isPaused = false;
-            addon.data.tts.state = "playing";
+        if (!this.audioElement || !this.isPaused) return;
+        const id = this.playbackId;
+        this.isPaused = false;
+        addon.data.tts.state = "playing";
+        try {
+            Promise.resolve(this.audioElement.play()).catch(error => this.failPlayback(id, error));
+        } catch (error) {
+            this.failPlayback(id, error);
         }
     }
 
@@ -270,6 +275,11 @@ class AudioPlayer {
     }
 
     public stop(): void {
+        this.playbackId++;
+        if (this.audioElement) {
+            this.audioElement.onended = null;
+            this.audioElement.onerror = null;
+        }
         if (this.audioElement) {
             this.audioElement.pause();
             this.audioElement.currentTime = 0;
@@ -420,6 +430,7 @@ class KokoroSynthesizer {
 
     constructor() {
         this.audioPlayer = new AudioPlayer();
+        this.audioPlayer.setOnErrorCallback(() => this.stop());
         this.textSplitter = new TextSectionSplitter();
         this.audioPlayer.setOnCompleteCallback(() => this.onAudioComplete());
     }
