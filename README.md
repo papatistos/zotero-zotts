@@ -1,7 +1,7 @@
 # ![](addon/chrome/content/icons/favicon@48.svg) ZoTTS
 ZoTTS is a Zotero plugin to add TTS functionality
 
-[![Zotero target version 7](https://img.shields.io/badge/Zotero-7-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
+[![Zotero 7–10](https://img.shields.io/badge/Zotero-7%E2%80%9310-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
 [![Using Zotero Plugin Template](https://img.shields.io/badge/Using-Zotero%20Plugin%20Template-blue?style=flat-square&logo=github)](https://github.com/windingwind/zotero-plugin-template)
 
 > [!NOTE]
@@ -18,17 +18,15 @@ ZoTTS is a Zotero plugin to add TTS functionality
 
 ## Install :rocket:
 
-> The latest stable version is available [here](https://github.com/ImperialSquid/zotero-zotts/releases/latest)
-> The full version list, including any prerelease versions is [here](https://github.com/ImperialSquid/zotero-zotts/releases)
+This fork does not provide releases. To install it, obtain or build an `.xpi` file.
 
-1. Download the .xpi file from the [latest release](https://github.com/ImperialSquid/zotero-zotts/releases)
-   - If you're using firefox, right click and select "Save as..."
+1. Save the `.xpi` file on your computer.
 2. In Zotero, go to `Tools > Plugins`
 3. Click the gear icon in the top right
 4. Select `Install Add-on From File...`
 5. Browse to the downloaded .xpi file and select it
 
-The plugin should load straight away, and future updates will be downloaded automatically!
+Install newer `.xpi` files manually using the same steps.
 
 > [!TIP]
 > If you want some information about finding more voices for ZoTTS, please see [this documentation](docs/BETTER_VOICES.md).
@@ -68,24 +66,16 @@ On each annotation there are also buttons to speak the annotated text, and the c
 ![](docs/resources/anno-comm-buttons.png)
 
 ### Preferences
-In the preferences you can:
-- **Enable/disable queueing**
-  - If you want to speak a new item, should ZoTTS add it to a queue, or cancel the current item and speak the new one?
-- **Adjust the current voice and related settings**
-  - Voices used are the ones built in to your computer (WebSpeech), Azure TTS, OpenAI TTS, the Local OpenAI-compatible engine, or the dedicated Kokoro engine
-  - The Local engine now also exposes a model field
-  - The Kokoro engine can auto-detect the API base URL and populate available languages, models and voices from the server
-  - You can also adjust the rate/pitch/volume where supported
-- **Tweak shortcuts**
-  - Rebind the speak, pause and cancel shortcuts to use other letters
-  - Change what happens when you're holding `Ctrl/Cmd` vs `Ctrl/Cmd + Shift`
-- **Specify substitutions**
-   - A lot of TTS engines don't pronounce things how you might want, you can tell ZoTTS text to look out for and what to replace it with
-   - Patterns to be replaced can be either raw text or regex patterns
-- **Create favourites**
-   - Create a set of favourites with specific voices and other settings
-   - You can quickly cycle between favourites with the shortcut
-   - Especially useful for users who might read in multiple languages
+The settings sections are collapsible and start expanded. Favourites is the first section, followed by Substitutions & omissions.
+
+- Favourites save speech presets with an engine, voice and related settings. Cloud API keys are not saved in favourites. You can create presets for different languages and cycle between presets with `Ctrl/Cmd + Shift + Q`.
+- Substitutions & omissions lets you replace text before speaking it, using plain text or regular expressions. Its "Per document ommissions" subsection lets you omit text marked with annotations of a chosen colour, such as page numbers in headers or footers.
+- Queueing settings let you choose whether a new speech request joins the queue or cancels the current speech.
+- Voice settings let you choose System Voices, Azure TTS, OpenAI TTS, the Local OpenAI-compatible engine or the dedicated Kokoro engine. System Voices uses your computer's installed voices without requiring a cloud TTS service. Rate, pitch and volume controls are available where the engine supports them.
+- The Local engine has a model field. The Kokoro engine can auto-detect the API base URL and load available languages, models and voices from the server.
+- Shortcut settings let you rebind the speak, pause and cancel shortcuts and swap the behaviour of `Ctrl/Cmd + S` and `Ctrl/Cmd + Shift + S`.
+
+If a settings search matches a control inside a collapsed section, expand the section to see the control.
 
 When using the Kokoro engine, ZoTTS also plays a short cue as soon as a request is sent so you get immediate feedback while the audio is being synthesized.
 
