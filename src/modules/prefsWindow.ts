@@ -1010,11 +1010,6 @@ function validateSubs(subs: string): SubsValidation {
         subs: []
     }
 
-    // no subs to validate
-    if (lines[0].length === 0) {
-        return validation
-    }
-
     lines.forEach((value, index) => {
         if (value === "" || value.charAt(0) === "#") {
             // skip lines that are empty or commented out
@@ -1026,6 +1021,15 @@ function validateSubs(subs: string): SubsValidation {
             validation.valid = false
             validation.errors.push(index + 1)
         } else {
+            if (results[1] === "/") {
+                try {
+                    new RegExp(results[2], "g")
+                } catch {
+                    validation.valid = false
+                    validation.errors.push(index + 1)
+                    return
+                }
+            }
             validation.subs.push([
                 results[2],
                 results[3],
