@@ -272,7 +272,7 @@ export function registerReaderListeners() {
                                 {
                                     type: "click",
                                     listener: (e) => {
-                                        addon.hooks.onSpeakOrResume()
+                                        addon.hooks.onSpeakOrResume(undefined, reader)
                                     }
                                 }
                             ]
@@ -441,7 +441,7 @@ function injectUIIntoExistingReaders(): void {
                             classList: ["toolbar-button"],
                             listeners: [{
                                 type: "click",
-                                listener: () => addon.hooks.onSpeakOrResume()
+                                listener: () => addon.hooks.onSpeakOrResume(undefined, reader)
                             }]
                         },
                         {

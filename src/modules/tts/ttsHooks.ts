@@ -62,8 +62,9 @@ function resume() {
 }
 
 // for speaking using shortcuts and UI elements not specifically tied to any text (eg text selection popup)
-async function contextualSpeak(shiftHeld?: boolean) {
-    if (Zotero_Tabs.selectedType == "library") {
+async function contextualSpeak(shiftHeld?: boolean, targetReader?: _ZoteroTypes.ReaderInstance) {
+    const tabs = targetReader ? undefined : (Zotero.getMainWindow() as _ZoteroTypes.MainWindow).Zotero_Tabs
+    if (!targetReader && tabs?.selectedType === "library") {
         // library tab context
 
         let items = Zotero.getActiveZoteroPane().getSelectedItems()
@@ -96,7 +97,7 @@ async function contextualSpeak(shiftHeld?: boolean) {
     } else {
         // reader tab context
 
-        let reader = Zotero.Reader.getByTabID(Zotero_Tabs.selectedID)
+        let reader = targetReader ?? (tabs ? Zotero.Reader.getByTabID(tabs.selectedID) : undefined)
         if (reader === undefined) {
             return
         }
@@ -145,11 +146,11 @@ async function contextualSpeak(shiftHeld?: boolean) {
     }
 }
 
-function speakOrResume(shiftHeld?: boolean) {
+function speakOrResume(shiftHeld?: boolean, reader?: _ZoteroTypes.ReaderInstance) {
     if (addon.data.tts.state === "paused") {
         resume()
     } else {
-        void contextualSpeak(shiftHeld)
+        void contextualSpeak(shiftHeld, reader)
     }
 }
 
