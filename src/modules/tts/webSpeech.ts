@@ -78,15 +78,15 @@ function resume() {
 }
 
 function setDefaultPrefs() {
-    if (!getPref("webSpeech.pitch")) {
+    if (getPref("webSpeech.pitch") === undefined) {
         setPref("webSpeech.pitch", 100)
     }
 
-    if (!getPref("webSpeech.rate")) {
+    if (getPref("webSpeech.rate") === undefined) {
         setPref("webSpeech.rate", 100)
     }
 
-    if (!getPref("webSpeech.volume")) {
+    if (getPref("webSpeech.volume") === undefined) {
         setPref("webSpeech.volume", 50)
     }
 
