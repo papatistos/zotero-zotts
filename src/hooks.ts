@@ -1,6 +1,5 @@
 import { config } from "../package.json"
 import { setDefaultPrefs } from "./modules/utils/prefs"
-import { ZoteroToolkit } from "zotero-plugin-toolkit"
 import { registerMenu } from "./modules/menu"
 import { prefsLoadHook, prefsRefreshHook, registerPrefsWindow } from "./modules/prefsWindow"
 import { registerShortcuts } from "./modules/shortcuts"
@@ -11,6 +10,9 @@ import { initEngines, checkStatus } from "./modules/tts"
 import { speak, stop, pause, resume, speakOrResume, speakTest, speedChange, skipBackward, skipForward, replaySection } from "./modules/tts/ttsHooks";
 import { loadIcons } from "./modules/utils/icons";
 import { notifyStatus } from "./modules/utils/notify";
+
+const windowCleanups = new Map<Window, () => void>()
+let globalControlsRegistered = false
 
 async function onStartup() {
   await Promise.all([
@@ -53,31 +55,26 @@ async function onMainWindowLoad(win: Window): Promise<void> {
     Zotero.uiReadyPromise,
   ])
 
-  // TODO: optim - create custom toolkit to minify
-  addon.data.ztoolkit = new ZoteroToolkit()
-  
-  // Disable FieldHooks debug traces (ZoTTS doesn't use FieldHooks)
-  if (addon.data.ztoolkit.FieldHooks) {
-    addon.data.ztoolkit.FieldHooks.basicOptions.log.disableConsole = true
-  }
+  if (windowCleanups.has(win)) { return }
+  windowCleanups.set(win, registerMenu(win))
 
-  // TODO: l10n - implement locale appending
-  // (win as any).MozXULElement.insertFTLIfNeeded(
-  //     `${config.addonRef}-mainWindow.ftl`,
-  // )
-
-  // if (checkStatus()) {
+  // The toolkit keyboard manager already listens across main windows and readers.
+  if (!globalControlsRegistered) {
+    if (ztoolkit.FieldHooks) {
+      ztoolkit.FieldHooks.basicOptions.log.disableConsole = true
+    }
     registerPrefsWindow()
-    registerMenu()
     registerShortcuts()
     registerReaderListeners()
-  // }
+    globalControlsRegistered = true
+  }
 
   notifyStatus()  // report ready or error status as soon as possible
 }
 
 async function onMainWindowUnload(win: Window): Promise<void> {
-  ztoolkit.unregisterAll()
+  windowCleanups.get(win)?.()
+  windowCleanups.delete(win)
 
   // TODO: l10n - implement locale removal
   // win.document
@@ -86,7 +83,11 @@ async function onMainWindowUnload(win: Window): Promise<void> {
 }
 
 function onShutdown(): void {
+  for (const cleanup of windowCleanups.values()) { cleanup() }
+  windowCleanups.clear()
+  Zotero.Reader._unregisterEventListenerByPluginID(config.addonID)
   ztoolkit.unregisterAll()
+  globalControlsRegistered = false
 
   // Clean up TTS engines
   for (const engineName in addon.data.tts.engines) {
