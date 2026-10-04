@@ -360,7 +360,8 @@ interface SessionCache {
     text: string;
     voice: string;
     model: string;
-    sections: Blob[]; // All audio blobs for the current text
+    sections: Blob[];
+    complete: boolean; // All audio blobs for the current text
 }
 
 // OpenAI TTS Synthesizer with streaming/prefetch support
@@ -368,7 +369,9 @@ class OpenAISynthesizer {
     private audioPlayer: AudioPlayer;
     private textSplitter: TextSectionSplitter;
     private isStopped: boolean = false;
-    private abortController: AbortController | null = null;
+    private activeAbortControllers = new Set<AbortController>();
+    private activeSessionId = 0;
+    private waitingForPrefetch = false;
     private pendingBlobUrl: string | null = null;
     
     // Streaming/prefetch queue
@@ -391,6 +394,8 @@ class OpenAISynthesizer {
     }
 
     public async speak(text: string): Promise<void> {
+        this.invalidateActiveSession();
+        const sessionId = this.activeSessionId;
         // Stop any previous playback
         if (this.audioPlayer) {
             this.audioPlayer.stop();
@@ -409,7 +414,7 @@ class OpenAISynthesizer {
         const voice = getPref("openai.voice") as OpenAIVoice || "alloy";
         const model = getPref("openai.model") as OpenAIModel || "tts-1";
         
-        if (this.sessionCache && 
+        if (this.sessionCache?.complete &&
             this.sessionCache.text === text && 
             this.sessionCache.voice === voice &&
             this.sessionCache.model === model) {
@@ -441,7 +446,7 @@ class OpenAISynthesizer {
             text: text,
             voice: voice,
             model: model,
-            sections: []
+            sections: [], complete: false
         };
 
         // Start prefetching next sections while we synthesize the first
@@ -450,7 +455,7 @@ class OpenAISynthesizer {
         }
 
         // Synthesize and play first section
-        await this.speakSection(firstSection, firstSectionIndex);
+        await this.speakSection(firstSection, firstSectionIndex, sessionId);
 
         // Check if stopped during synthesis
         if (this.isStopped) {
@@ -458,60 +463,30 @@ class OpenAISynthesizer {
         }
     }
 
-    private async speakSection(sectionText: string, sectionIndex: number): Promise<void> {
-        // Early return if stopped
-        if (this.isStopped) {
-            return;
-        }
-
-        // Prepare audio player for new section synthesis
+    private async speakSection(sectionText: string, sectionIndex: number, sessionId = this.activeSessionId): Promise<void> {
+        if (this.isStopped || sessionId !== this.activeSessionId) return;
         this.audioPlayer.prepareForNewSection();
-
         await this.audioPlayer.initialize();
-
+        if (this.isStopped || sessionId !== this.activeSessionId) return;
         try {
-            // Synthesize to blob
-            const audioBlob = await this.synthesizeToBlob(sectionText);
-            ztoolkit.log(`Received audio: ${audioBlob.size} bytes`);
-
-            // Cache this section
-            if (this.sessionCache) {
-                this.sessionCache.sections[sectionIndex] = audioBlob;
-            }
-
-            // Check if stopped during synthesis
-            if (this.isStopped) {
-                return;
-            }
-
-            // Play the audio
+            const audioBlob = await this.synthesizeToBlob(sectionText, sessionId);
+            if (this.isStopped || sessionId !== this.activeSessionId) return;
+            if (this.sessionCache) this.sessionCache.sections[sectionIndex] = audioBlob;
             this.currentSectionIndex = sectionIndex;
             await this.audioPlayer.playAudio(audioBlob);
-
         } catch (error) {
-            // Ignore abort errors (expected when stop() is called)
-            if (error instanceof Error && error.name === 'AbortError') {
-                ztoolkit.log('OpenAI request aborted');
-                return;
-            }
-            
+            if (sessionId !== this.activeSessionId || this.isStopped) return;
+            if (error instanceof Error && error.name === "AbortError") return;
+            this.stop();
             throw error;
         }
     }
 
     public stop(): void {
+        this.invalidateActiveSession();
         this.isStopped = true;
         this.cachePlaybackActive = false;
-        
-        // Abort any pending fetch requests
-        if (this.abortController) {
-            this.abortController.abort();
-            this.abortController = null;
-        }
-        
-        // Clear prefetch queue
         this.clearQueue();
-        
         this.textSplitter.reset();
         this.audioPlayer.stop();
         addon.data.tts.state = "idle";
@@ -579,64 +554,41 @@ class OpenAISynthesizer {
     public dispose(): void {
         this.stop();
         this.audioPlayer.dispose();
-        this.abortController = null;
+
     }
 
-    private async onAudioComplete(): Promise<void> {
-        // Early return if stopped
-        if (this.isStopped) {
-            this.textSplitter.reset();
-            addon.data.tts.state = "idle";
-            return;
-        }
-
-        // If playing from cache, continue with next cached section
-        if (this.cachePlaybackActive && this.sessionCache && this.nextCachedPlaybackIndex < this.sessionCache.sections.length) {
-            ztoolkit.log(`Continuing cached playback: next section ${this.nextCachedPlaybackIndex}/${this.sessionCache.sections.length}`);
-            await this.playCachedSection();
-            return;
-        } else if (this.cachePlaybackActive) {
-            // Exhausted cached playback, fall back to streaming state
+    private onAudioComplete(): void {
+        if (this.isStopped) return;
+        this.waitingForPrefetch = false;
+        if (this.cachePlaybackActive) {
+            if (this.sessionCache && this.nextCachedPlaybackIndex < this.sessionCache.sections.length) {
+                void this.playCachedSection();
+                return;
+            }
             this.cachePlaybackActive = false;
         }
-
-        // Check if we have prefetched audio ready in queue
-        if (this.audioQueue.length > 0) {
-            const queuedAudio = this.audioQueue.shift()!;
-            ztoolkit.log(`Playing queued audio: ${queuedAudio.section.length} chars, queue remaining: ${this.audioQueue.length}`);
-            
-            // Continue prefetching if there are more sections
-            if (this.textSplitter.hasMore()) {
-                this.startPrefetching();
-            }
-            
-            // Play the queued audio immediately (no API wait!)
-            try {
-                this.currentSectionIndex = queuedAudio.index;
-                await this.audioPlayer.playAudio(queuedAudio.blob);
-            } catch (error) {
-                ztoolkit.log(`Error playing queued audio: ${error}`);
-                addon.data.tts.state = "idle";
-            }
+        const expectedIndex = this.currentSectionIndex + 1;
+        if (this.audioQueue[0]?.index === expectedIndex) {
+            const queued = this.audioQueue.shift()!;
+            this.currentSectionIndex = queued.index;
+            void this.audioPlayer.playAudio(queued.blob);
+            this.startPrefetching();
             return;
         }
-
-        // No queued audio - check if there are more text sections to synthesize
+        if (this.prefetchInProgress.size > 0) {
+            this.waitingForPrefetch = true;
+            return;
+        }
         if (this.textSplitter.hasMore()) {
-            const nextSection = this.textSplitter.getNextSection();
-            const nextSectionIndex = this.nextSectionIndex++;
-            ztoolkit.log(`No queued audio, fetching next section: ${nextSection.length} chars, hasMore: ${this.textSplitter.hasMore()}`);
-
-            try {
-                await this.speakSection(nextSection, nextSectionIndex);
-            } catch (error) {
-                ztoolkit.log(`Error synthesizing section: ${error}`);
-                this.textSplitter.reset();
-                addon.data.tts.state = "idle";
-            }
+            const section = this.textSplitter.getNextSection();
+            const index = this.nextSectionIndex++;
+            const sessionId = this.activeSessionId;
+            void this.speakSection(section, index, sessionId).catch(error => {
+                if (sessionId !== this.activeSessionId) return;
+                ztoolkit.log(`Error synthesizing: ${error}`);
+            });
         } else {
-            // All text sections completed
-            ztoolkit.log('All text sections completed');
+            if (this.sessionCache) this.sessionCache.complete = true;
             this.textSplitter.reset();
             addon.data.tts.state = "idle";
         }
@@ -646,66 +598,42 @@ class OpenAISynthesizer {
      * Start prefetching upcoming sections in parallel
      */
     private startPrefetching(): void {
-        // Don't prefetch more than MAX_PREFETCH sections ahead
-        const sectionsToFetch = Math.min(this.MAX_PREFETCH - this.audioQueue.length - this.prefetchInProgress.size, this.MAX_PREFETCH);
-        
-        for (let i = 0; i < sectionsToFetch && this.textSplitter.hasMore(); i++) {
-            const sectionIndex = this.nextSectionIndex++;
-            
-            if (!this.prefetchInProgress.has(sectionIndex)) {
-                this.prefetchInProgress.add(sectionIndex);
-                const section = this.textSplitter.getNextSection();
-                
-                ztoolkit.log(`Prefetching section ${sectionIndex}: ${section.length} chars`);
-                
-                // Fetch in background without blocking
-                this.fetchSection(section, sectionIndex).catch((error) => {
-                    ztoolkit.log(`Prefetch error for section ${sectionIndex}: ${error}`);
-                    this.prefetchInProgress.delete(sectionIndex);
-                });
-            }
+        const sessionId = this.activeSessionId;
+        if (this.isStopped) return;
+        const count = this.MAX_PREFETCH - this.audioQueue.length - this.prefetchInProgress.size;
+        for (let i = 0; i < count && this.textSplitter.hasMore(); i++) {
+            const index = this.nextSectionIndex++;
+            const section = this.textSplitter.getNextSection();
+            this.prefetchInProgress.add(index);
+            void this.fetchSection(section, index, sessionId);
         }
     }
 
     /**
      * Fetch a single section and add to queue
      */
-    private async fetchSection(sectionText: string, sectionIndex: number): Promise<void> {
-        // Early return if stopped
-        if (this.isStopped) {
-            this.prefetchInProgress.delete(sectionIndex);
-            return;
-        }
-
+    private async fetchSection(sectionText: string, sectionIndex: number, sessionId = this.activeSessionId): Promise<void> {
+        if (this.isStopped || sessionId !== this.activeSessionId) return;
         try {
-            const audioBlob = await this.synthesizeToBlob(sectionText);
-            
-            // Cache this section
-            if (this.sessionCache) {
-                this.sessionCache.sections[sectionIndex] = audioBlob;
-            }
-            
-            // Check if stopped during fetch
-            if (this.isStopped) {
-                this.prefetchInProgress.delete(sectionIndex);
-                return;
-            }
-            
-            // Add to queue
-            this.audioQueue.push({ blob: audioBlob, section: sectionText, index: sectionIndex });
+            const audioBlob = await this.synthesizeToBlob(sectionText, sessionId);
+            if (this.isStopped || sessionId !== this.activeSessionId) return;
+            if (this.sessionCache) this.sessionCache.sections[sectionIndex] = audioBlob;
+            this.audioQueue.push({blob: audioBlob, section: sectionText, index: sectionIndex});
+            this.audioQueue.sort((a, b) => a.index - b.index);
             this.prefetchInProgress.delete(sectionIndex);
-            
-            ztoolkit.log(`Queued section ${sectionIndex}: ${audioBlob.size} bytes, queue size: ${this.audioQueue.length}`);
+            if (this.waitingForPrefetch) this.onAudioComplete();
         } catch (error) {
-            this.prefetchInProgress.delete(sectionIndex);
-            throw error;
+            if (this.isStopped || sessionId !== this.activeSessionId) return;
+            ztoolkit.log(`Prefetch error: ${error}`);
+            // Do not silently skip a failed document section.
+            this.stop();
         }
     }
 
     /**
      * Synthesize text to audio blob without playing
      */
-    private async synthesizeToBlob(sectionText: string): Promise<Blob> {
+    private async synthesizeToBlob(sectionText: string, sessionId = this.activeSessionId): Promise<Blob> {
         // Validate configuration
         const { apiKey } = getOpenAIConfig();
         const voice = getPref("openai.voice") as OpenAIVoice || "alloy";
@@ -716,7 +644,13 @@ class OpenAISynthesizer {
         }
 
         // Create abort controller for this request
+        if (this.isStopped || sessionId !== this.activeSessionId) {
+            const error = new Error("Request invalidated");
+            error.name = "AbortError";
+            throw error;
+        }
         const controller = new AbortController();
+        this.activeAbortControllers.add(controller);
 
         try {
             const response = await fetch("https://api.openai.com/v1/audio/speech", {
@@ -763,6 +697,8 @@ class OpenAISynthesizer {
 
             ztoolkit.log(`OpenAI TTS network error: ${error}`);
             throw new Error(ErrorCodes.CONNECTION_FAILED);
+        } finally {
+            this.activeAbortControllers.delete(controller);
         }
     }
 
@@ -772,6 +708,13 @@ class OpenAISynthesizer {
     private clearQueue(): void {
         this.audioQueue = [];
         this.prefetchInProgress.clear();
+        this.waitingForPrefetch = false;
+    }
+
+    private invalidateActiveSession(): void {
+        this.activeSessionId++;
+        for (const controller of this.activeAbortControllers) controller.abort();
+        this.activeAbortControllers.clear();
     }
 
     /**
@@ -921,7 +864,7 @@ function speak(text: string): void {
             "error"
         );
 
-        addon.data.tts.state = "idle";
+        // The current synthesizer already stopped before propagating the error.
     });
 }
 

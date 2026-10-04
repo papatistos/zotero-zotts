@@ -300,6 +300,7 @@ interface SessionCache {
     text: string;
     voice: string;
     sections: Blob[];
+    complete: boolean;
 }
 
 interface QueuedAudio {
@@ -316,7 +317,9 @@ class LocalSynthesizer {
     private audioPlayer: AudioPlayer;
     private textSplitter: TextSectionSplitter;
     private isStopped: boolean = false;
-    private abortController: AbortController | null = null;
+    private activeAbortControllers = new Set<AbortController>();
+    private activeSessionId = 0;
+    private waitingForPrefetch = false;
     
     private audioQueue: QueuedAudio[] = [];
     private prefetchInProgress: Set<number> = new Set();
@@ -336,6 +339,8 @@ class LocalSynthesizer {
     }
 
     public async speak(text: string): Promise<void> {
+        this.invalidateActiveSession();
+        const sessionId = this.activeSessionId;
         this.audioPlayer.stop();
         this.clearQueue();
         
@@ -347,14 +352,14 @@ class LocalSynthesizer {
         const voice = getPref("local.voice") as string || "bm_fable";
         
         // Check cache
-        if (this.sessionCache?.text === text && this.sessionCache?.voice === voice) {
+        if (this.sessionCache?.complete && this.sessionCache?.text === text && this.sessionCache?.voice === voice) {
             ztoolkit.log(`Playing from cache: ${this.sessionCache.sections.length} sections`);
             this.isStopped = false;
             await this.playCachedSection();
             return;
         }
 
-        this.sessionCache = { text, voice, sections: [] };
+        this.sessionCache = { text, voice, sections: [], complete: false };
         this.textSplitter.initialize(text);
         this.isStopped = false;
 
@@ -367,136 +372,96 @@ class LocalSynthesizer {
             this.startPrefetching();
         }
 
-        await this.speakSection(firstSection, firstIndex);
+        await this.speakSection(firstSection, firstIndex, sessionId);
     }
 
-    private async speakSection(sectionText: string, sectionIndex: number): Promise<void> {
-        if (this.isStopped) return;
-
+    private async speakSection(sectionText: string, sectionIndex: number, sessionId = this.activeSessionId): Promise<void> {
+        if (this.isStopped || sessionId !== this.activeSessionId) return;
         this.audioPlayer.prepareForNewSection();
         await this.audioPlayer.initialize();
-
+        if (this.isStopped || sessionId !== this.activeSessionId) return;
         try {
-            const audioBlob = await this.synthesizeToBlob(sectionText);
-            ztoolkit.log(`Received audio: ${audioBlob.size} bytes`);
-
-            if (this.sessionCache) {
-                this.sessionCache.sections[sectionIndex] = audioBlob;
-            }
-
-            if (this.isStopped) return;
-
+            const audioBlob = await this.synthesizeToBlob(sectionText, sessionId);
+            if (this.isStopped || sessionId !== this.activeSessionId) return;
+            if (this.sessionCache) this.sessionCache.sections[sectionIndex] = audioBlob;
             this.currentSectionIndex = sectionIndex;
             await this.audioPlayer.playAudio(audioBlob);
         } catch (error) {
-            if (error instanceof Error && error.name === 'AbortError') {
-                ztoolkit.log('Local request aborted');
-                return;
-            }
+            if (sessionId !== this.activeSessionId || this.isStopped) return;
+            if (error instanceof Error && error.name === "AbortError") return;
+            this.stop();
             throw error;
         }
     }
 
     private startPrefetching(): void {
-        const sectionsToFetch = Math.min(
-            this.MAX_PREFETCH - this.audioQueue.length - this.prefetchInProgress.size,
-            this.MAX_PREFETCH
-        );
-
-        for (let i = 0; i < sectionsToFetch && this.textSplitter.hasMore(); i++) {
-            const sectionIndex = this.nextSectionIndex++;
-            
-            if (!this.prefetchInProgress.has(sectionIndex)) {
-                this.prefetchInProgress.add(sectionIndex);
-                const section = this.textSplitter.getNextSection();
-                
-                ztoolkit.log(`Prefetching section ${sectionIndex}: ${section.length} chars`);
-                
-                this.fetchSection(section, sectionIndex).catch((error) => {
-                    ztoolkit.log(`Prefetch error: ${error}`);
-                    this.prefetchInProgress.delete(sectionIndex);
-                });
-            }
+        const sessionId = this.activeSessionId;
+        if (this.isStopped) return;
+        const count = this.MAX_PREFETCH - this.audioQueue.length - this.prefetchInProgress.size;
+        for (let i = 0; i < count && this.textSplitter.hasMore(); i++) {
+            const index = this.nextSectionIndex++;
+            const section = this.textSplitter.getNextSection();
+            this.prefetchInProgress.add(index);
+            void this.fetchSection(section, index, sessionId);
         }
     }
 
-    private async fetchSection(sectionText: string, sectionIndex: number): Promise<void> {
-        if (this.isStopped) {
-            this.prefetchInProgress.delete(sectionIndex);
-            return;
-        }
-
+    private async fetchSection(sectionText: string, sectionIndex: number, sessionId = this.activeSessionId): Promise<void> {
+        if (this.isStopped || sessionId !== this.activeSessionId) return;
         try {
-            const audioBlob = await this.synthesizeToBlob(sectionText);
-            
-            if (this.sessionCache) {
-                this.sessionCache.sections[sectionIndex] = audioBlob;
-            }
-
-            if (this.isStopped) {
-                this.prefetchInProgress.delete(sectionIndex);
-                return;
-            }
-
-            this.audioQueue.push({ blob: audioBlob, section: sectionText, index: sectionIndex });
-            ztoolkit.log(`Prefetched section ${sectionIndex}, queue size: ${this.audioQueue.length}`);
+            const audioBlob = await this.synthesizeToBlob(sectionText, sessionId);
+            if (this.isStopped || sessionId !== this.activeSessionId) return;
+            if (this.sessionCache) this.sessionCache.sections[sectionIndex] = audioBlob;
+            this.audioQueue.push({blob: audioBlob, section: sectionText, index: sectionIndex});
+            this.audioQueue.sort((a, b) => a.index - b.index);
             this.prefetchInProgress.delete(sectionIndex);
+            if (this.waitingForPrefetch) this.onAudioComplete();
         } catch (error) {
-            this.prefetchInProgress.delete(sectionIndex);
-            throw error;
+            if (this.isStopped || sessionId !== this.activeSessionId) return;
+            ztoolkit.log(`Prefetch error: ${error}`);
+            // Do not silently skip a failed document section.
+            this.stop();
         }
     }
 
     private onAudioComplete(): void {
-        if (this.isStopped) {
-            this.textSplitter.reset();
-            addon.data.tts.state = "idle";
-            return;
-        }
-
-        // Playing from cache
-        if (this.cachePlaybackActive && this.sessionCache && 
-            this.nextCachedPlaybackIndex < this.sessionCache.sections.length) {
-            ztoolkit.log(`Continuing cached playback: section ${this.nextCachedPlaybackIndex}`);
-            this.playCachedSection();
-            return;
-        } else if (this.cachePlaybackActive) {
+        if (this.isStopped) return;
+        this.waitingForPrefetch = false;
+        if (this.cachePlaybackActive) {
+            if (this.sessionCache && this.nextCachedPlaybackIndex < this.sessionCache.sections.length) {
+                void this.playCachedSection();
+                return;
+            }
             this.cachePlaybackActive = false;
         }
-
-        // Check prefetch queue
-        if (this.audioQueue.length > 0) {
+        const expectedIndex = this.currentSectionIndex + 1;
+        if (this.audioQueue[0]?.index === expectedIndex) {
             const queued = this.audioQueue.shift()!;
-            ztoolkit.log(`Playing queued audio: section ${queued.index}`);
-            
-            if (this.textSplitter.hasMore()) {
-                this.startPrefetching();
-            }
-            
             this.currentSectionIndex = queued.index;
-            this.audioPlayer.playAudio(queued.blob);
+            void this.audioPlayer.playAudio(queued.blob);
+            this.startPrefetching();
             return;
         }
-
-        // Synthesize more
+        if (this.prefetchInProgress.size > 0) {
+            this.waitingForPrefetch = true;
+            return;
+        }
         if (this.textSplitter.hasMore()) {
-            const nextSection = this.textSplitter.getNextSection();
-            const nextIndex = this.nextSectionIndex++;
-            ztoolkit.log(`Fetching next section: ${nextSection.length} chars`);
-            
-            this.speakSection(nextSection, nextIndex).catch((error) => {
+            const section = this.textSplitter.getNextSection();
+            const index = this.nextSectionIndex++;
+            const sessionId = this.activeSessionId;
+            void this.speakSection(section, index, sessionId).catch(error => {
+                if (sessionId !== this.activeSessionId) return;
                 ztoolkit.log(`Error synthesizing: ${error}`);
-                this.textSplitter.reset();
-                addon.data.tts.state = "idle";
             });
         } else {
-            ztoolkit.log('All sections completed');
+            if (this.sessionCache) this.sessionCache.complete = true;
             this.textSplitter.reset();
             addon.data.tts.state = "idle";
         }
     }
 
-    private async synthesizeToBlob(sectionText: string): Promise<Blob> {
+    private async synthesizeToBlob(sectionText: string, sessionId = this.activeSessionId): Promise<Blob> {
         const { apiUrl } = getLocalConfig();
         const voice = getPref("local.voice") as string || "bm_fable";
 
@@ -504,7 +469,13 @@ class LocalSynthesizer {
             throw new Error(ErrorCodes.CONFIG_INCOMPLETE);
         }
 
+        if (this.isStopped || sessionId !== this.activeSessionId) {
+            const error = new Error("Request invalidated");
+            error.name = "AbortError";
+            throw error;
+        }
         const controller = new AbortController();
+        this.activeAbortControllers.add(controller);
 
         try {
             const response = await fetch(`${apiUrl}/v1/audio/speech`, {
@@ -537,12 +508,21 @@ class LocalSynthesizer {
             
             ztoolkit.log(`Local TTS network error: ${error}`);
             throw new Error(ErrorCodes.CONNECTION_FAILED);
+        } finally {
+            this.activeAbortControllers.delete(controller);
         }
     }
 
     private clearQueue(): void {
         this.audioQueue = [];
         this.prefetchInProgress.clear();
+        this.waitingForPrefetch = false;
+    }
+
+    private invalidateActiveSession(): void {
+        this.activeSessionId++;
+        for (const controller of this.activeAbortControllers) controller.abort();
+        this.activeAbortControllers.clear();
     }
 
     private async playCachedSection(startIndex?: number): Promise<void> {
@@ -577,12 +557,9 @@ class LocalSynthesizer {
     }
 
     public stop(): void {
+        this.invalidateActiveSession();
         this.isStopped = true;
         this.cachePlaybackActive = false;
-        if (this.abortController) {
-            this.abortController.abort();
-            this.abortController = null;
-        }
         this.clearQueue();
         this.textSplitter.reset();
         this.audioPlayer.stop();
@@ -626,7 +603,7 @@ class LocalSynthesizer {
     public dispose(): void {
         this.stop();
         this.audioPlayer.dispose();
-        this.abortController = null;
+
     }
 }
 
@@ -658,7 +635,7 @@ function speak(text: string): void {
             "error"
         );
 
-        addon.data.tts.state = "idle";
+        // The current synthesizer already stopped before propagating the error.
     });
 }
 
