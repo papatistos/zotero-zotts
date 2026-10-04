@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const {load,prefs}=require('./helpers.cjs');
 function harness(platform,behavior="cancel"){
  const utterances=[];const addon={data:{tts:{state:'idle',engines:{webSpeech:{extras:{linuxQueue:[]}}}}}};
- const module=load('src/modules/tts/webspeech.ts',{'../utils/prefs':prefs({newItemBehaviour:behavior,'webSpeech.voice':'voice'}),'../utils/wait':{}},{addon,Zotero:{isMac:platform==='mac',isWin:platform==='win',isLinux:platform==='linux'},window:{SpeechSynthesisUtterance:class {},speechSynthesis:{getVoices:()=>[{name:'voice'}],cancel(){},speak:utt=>utterances.push(utt)}}});
+ const module=load('src/modules/tts/webSpeech.ts',{'../utils/prefs':prefs({newItemBehaviour:behavior,'webSpeech.voice':'voice'}),'../utils/wait':{}},{addon,Zotero:{isMac:platform==='mac',isWin:platform==='win',isLinux:platform==='linux'},window:{SpeechSynthesisUtterance:class {},speechSynthesis:{getVoices:()=>[{name:'voice'}],cancel(){},speak:utt=>utterances.push(utt)}}});
  return {module,addon,utterances};
 }
 for(const platform of ['mac','win','linux']) {
