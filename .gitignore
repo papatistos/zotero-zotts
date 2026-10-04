@@ -4,3 +4,4 @@ node_modules
 .scaffold
 tsconfig.tsbuildinfo
 .DS_Store
+TODO.md
