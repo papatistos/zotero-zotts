@@ -35,3 +35,28 @@ for(const engine of ['local','openai']) {
   assert.equal(h.addon.data.tts.state,'idle');
  });
 }
+
+for (const engine of ['local', 'openai', 'kokoro']) {
+ test(engine+' waits when all remaining text is in flight', async()=>{
+  const h=harness(engine),s=new h.mod.Synth();const run=s.speak('x'.repeat(engine==='kokoro'?400:800));await tick();
+  const first=h.requests.findIndex(r=>JSON.parse(r.options.body).input.length===(engine==='kokoro'?160:250));
+  h.resolve(first,'first');await run;await tick();
+  const next=h.requests.findIndex((r,i)=>i!==first);
+  h.audios[0].onended();await tick();assert.notEqual(h.addon.data.tts.state,'idle');assert.equal(h.played.length,1);
+  h.resolve(next,'next');await tick();assert.equal(h.played.length,2);
+  h.audios[0].onended();await tick();assert.equal(h.addon.data.tts.state,'idle');
+ });
+ test(engine+' old failed prefetch cannot remove new in-flight index', async()=>{
+  const h=harness(engine),s=new h.mod.Synth();const old=s.speak('x'.repeat(1500));await tick();
+  const first=h.requests.findIndex(r=>JSON.parse(r.options.body).input.length===(engine==='kokoro'?160:250));h.resolve(first);await old;await tick();
+  const oldCount=h.requests.length;const run=s.speak('y'.repeat(1500));await tick();
+  const newFirst=h.requests.findIndex((r,i)=>i>=oldCount && JSON.parse(r.options.body).input.length===(engine==='kokoro'?160:250));h.resolve(newFirst);await run;await tick();
+  assert.ok(s.prefetchInProgress.has(1));
+  h.requests.find((r,i)=>i<oldCount && i!==first).reject(new Error('old failed'));await tick();
+  assert.ok(s.prefetchInProgress.has(1),'old catch must not delete new index');assert.equal(h.addon.data.tts.state,'playing');
+ });
+}
+test('kokoro failed prefetch does not leave the player waiting forever',async()=>{
+ const h=harness('kokoro'),s=new h.mod.Synth();const run=s.speak('x'.repeat(400));await tick();h.resolve(0);await run;await tick();
+ h.audios[0].onended();h.requests[1].reject(new Error('failed'));await tick();assert.equal(h.addon.data.tts.state,'idle');
+});

@@ -508,10 +508,12 @@ class KokoroSynthesizer {
             this.currentSectionIndex = sectionIndex;
             await this.audioPlayer.playAudio(audioBlob);
         } catch (error) {
+            if (sessionId !== this.activeSessionId || this.isStopped) return;
             if (error instanceof Error && error.name === 'AbortError') {
                 ztoolkit.log('Kokoro request aborted');
                 return;
             }
+            this.stop();
             throw error;
         }
     }
@@ -536,8 +538,9 @@ class KokoroSynthesizer {
                 ztoolkit.log(`Prefetching section ${sectionIndex}: ${section.length} chars`);
 
                 this.fetchSection(section, sectionIndex, sessionId).catch((error) => {
+                    if (sessionId !== this.activeSessionId || this.isStopped) return;
                     ztoolkit.log(`Prefetch error: ${error}`);
-                    this.prefetchInProgress.delete(sectionIndex);
+                    this.stop();
                 });
             }
         }
@@ -545,7 +548,6 @@ class KokoroSynthesizer {
 
     private async fetchSection(sectionText: string, sectionIndex: number, sessionId: number): Promise<void> {
         if (this.isStopped || sessionId !== this.activeSessionId) {
-            this.prefetchInProgress.delete(sectionIndex);
             return;
         }
 
@@ -553,7 +555,6 @@ class KokoroSynthesizer {
             const audioBlob = await this.synthesizeToBlob(sectionText, sessionId);
 
             if (sessionId !== this.activeSessionId || this.isStopped) {
-                this.prefetchInProgress.delete(sectionIndex);
                 return;
             }
 
@@ -562,7 +563,6 @@ class KokoroSynthesizer {
             }
 
             if (this.isStopped || sessionId !== this.activeSessionId) {
-                this.prefetchInProgress.delete(sectionIndex);
                 return;
             }
 
@@ -576,6 +576,7 @@ class KokoroSynthesizer {
                 this.onAudioComplete();
             }
         } catch (error) {
+            if (sessionId !== this.activeSessionId || this.isStopped) return;
             this.prefetchInProgress.delete(sectionIndex);
             throw error;
         }
@@ -625,10 +626,10 @@ class KokoroSynthesizer {
             const nextIndex = this.nextSectionIndex++;
             ztoolkit.log(`Fetching next section: ${nextSection.length} chars`);
 
-            this.speakSection(nextSection, nextIndex, this.activeSessionId).catch((error) => {
+            const sessionId = this.activeSessionId;
+            this.speakSection(nextSection, nextIndex, sessionId).catch((error) => {
+                if (sessionId !== this.activeSessionId) return;
                 ztoolkit.log(`Error synthesizing: ${error}`);
-                this.textSplitter.reset();
-                addon.data.tts.state = "idle";
             });
         } else {
             ztoolkit.log('All sections completed');
@@ -823,7 +824,7 @@ function speak(text: string): void {
             "error"
         );
 
-        addon.data.tts.state = "idle";
+        // The current synthesizer already stopped before propagating the error.
     });
 }
 
