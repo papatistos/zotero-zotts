@@ -12,7 +12,7 @@ pref-general-reloadTabs = Force reload UI elements on startup (may cause flashin
 pref-general-engine-label =
     .value = TTS Engine:
 pref-general-engine-webSpeech =
-    .label = Web Speech
+    .label = System voices
 pref-general-engine-azure =
     .label = Azure Speech
 pref-general-engine-openai =
@@ -33,7 +33,7 @@ pref-status-error =
     Cause: { ttsEngine-errorCause }
 
 # === WSA
-pref-sect-wsa = Web Speech
+pref-sect-wsa = System voices
 
 pref-wsa-voice = Current Voice
 pref-wsa-volume = Volume

@@ -1,7 +1,7 @@
 ## TTS l10n helpers
 # convert code names to human names
 ttsEngine-engineName = { $engine ->
-    [webSpeech] Web Speech
+    [webSpeech] System voices
     [azure] Azure Speech
     [openai] OpenAI Speech
     [local] Local TTS
@@ -20,9 +20,9 @@ ttsEngine-errorCause = { $engine ->
         [interrupted] Initialisation was interrupted
         [audio-busy] Audio service was busy (try restarting)
         [audio-hardware] Unable to identify audio device
-        [synthesis-unavailable] No WSA engine available
-        [synthesis-failed] WSA engine raised an error
-        [not-allowed] WSA engine start is not allowed
+        [synthesis-unavailable] System voices are unavailable
+        [synthesis-failed] System voices encountered an error
+        [not-allowed] System voices are not allowed to start
         [no-voices-found] No voices are installed
     }
     [azure] { $cause ->
