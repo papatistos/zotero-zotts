@@ -1,0 +1,45 @@
+/* Scope disclosure styling to ZoTTS rather than Zotero's other preference panes. */
+#zotero-prefpane-zotts .main-section {
+    margin-block: 0 12px;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+    border-radius: 6px;
+}
+
+#zotero-prefpane-zotts .main-section > details {
+    width: 100%;
+}
+
+#zotero-prefpane-zotts .main-section > details > summary {
+    padding: 10px 12px;
+    cursor: pointer;
+    background-color: color-mix(in srgb, currentColor 5%, transparent);
+    border-radius: 5px;
+}
+
+#zotero-prefpane-zotts summary > h2 {
+    display: inline;
+    margin: 0;
+    font-size: 1.1em;
+    font-weight: 600;
+}
+
+#zotero-prefpane-zotts summary:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+}
+
+#zotero-prefpane-zotts .settings-content {
+    padding: 0 12px 12px;
+}
+
+/* Explicitly cover XUL children as well as native HTML disclosure content. */
+#zotero-prefpane-zotts details:not([open]) > .settings-content {
+    display: none;
+}
+
+#zotero-prefpane-zotts .settings-subsection {
+    margin-block-start: 12px;
+    padding-block-start: 8px;
+    border-block-start: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+}

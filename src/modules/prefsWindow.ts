@@ -110,7 +110,7 @@ function registerPrefsWindow() {
             // label: "ZoTTS",
             // image: string, defaults to icon in manifest
             scripts: [],
-            stylesheets: [],
+            stylesheets: [rootURI + "chrome/content/preferences.css"],
             helpURL: repository.url,
             // defaultXUL: boolean
         }

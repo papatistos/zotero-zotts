@@ -8,11 +8,11 @@
       xmlns:html="http://www.w3.org/1999/xhtml"
 >
 <vbox class="main-section" id="__addonRef__-favourites">
-    <label for="__addonRef__-advanced-faves">
-        <html:h4 data-l10n-id="pref-subsect-advanced-faves"
-                 style="margin-bottom:1px">
-        </html:h4>
-    </label>
+    <html:details open="open">
+        <html:summary>
+            <html:h2 data-l10n-id="pref-subsect-advanced-faves"></html:h2>
+        </html:summary>
+        <vbox class="settings-content">
     <html:div id="__addonRef__-advanced-faves">
         <html:p data-l10n-id="pref-faves-p1"
                 style="margin-left:20px;">
@@ -42,12 +42,17 @@
 
     </html:div>
 
+
+        </vbox>
+    </html:details>
 </vbox>
 
 <vbox class="main-section" id="__addonRef__-advanced">
-    <label>
-        <html:h1 data-l10n-id="pref-sect-advanced"></html:h1>
-    </label>
+    <html:details open="open">
+        <html:summary>
+            <html:h2 data-l10n-id="pref-sect-advanced"></html:h2>
+        </html:summary>
+        <vbox class="settings-content">
 
     <label for="__addonRef__-advanced-subs">
         <html:h4 data-l10n-id="pref-subsect-advanced-subs"
@@ -184,12 +189,17 @@
     </vbox>
 
 </vbox>
+
+        </vbox>
+    </html:details>
 </vbox>
 
 <vbox class="main-section" id="__addonRef__-general">
-    <label>
-        <html:h1 data-l10n-id="pref-sect-general"></html:h1>
-    </label>
+    <html:details open="open">
+        <html:summary>
+            <html:h2 data-l10n-id="pref-sect-general"></html:h2>
+        </html:summary>
+        <vbox class="settings-content">
 
     <!-- queue or cancel on playing new items -->
     <html:div id="__addonRef__-general-queue">
@@ -239,12 +249,17 @@
                    value="kokoro"/>
         </radiogroup>
     </html:div>
+
+        </vbox>
+    </html:details>
 </vbox>
 
 <vbox class="main-section" id="__addonRef__-webSpeech">
-    <label id="__addonRef__-webSpeech-header">
-        <html:h1 data-l10n-id="pref-sect-wsa"></html:h1>
-    </label>
+    <html:details open="open">
+        <html:summary id="__addonRef__-webSpeech-header">
+            <html:h2 data-l10n-id="pref-sect-wsa"></html:h2>
+        </html:summary>
+        <vbox class="settings-content">
     <html:p id="webSpeech-status"
             data-l10n-id="pref-status-unknown"
             style="text-align:center; color:tomato !important; font-weight:bold;">
@@ -337,14 +352,19 @@
                  data-l10n-id="pref-wsa-testVoice">
     </html:button>
 
+
+        </vbox>
+    </html:details>
 </vbox>
 
 <!-- Azure Speech Settings -->
 <vbox class="main-section" 
       id="__addonRef__-azure">
-    <label id="__addonRef__-azure-header">
-        <html:h1 data-l10n-id="pref-sect-azure"></html:h1>
-    </label>
+    <html:details open="open">
+        <html:summary id="__addonRef__-azure-header">
+            <html:h2 data-l10n-id="pref-sect-azure"></html:h2>
+        </html:summary>
+        <vbox class="settings-content">
     <html:p id="azure-status"
             data-l10n-id="pref-status-unknown"
             style="text-align:center; color:tomato !important; font-weight:bold;">
@@ -475,14 +495,19 @@
                  data-l10n-id="pref-azure-testVoice">
     </html:button>
 
+
+        </vbox>
+    </html:details>
 </vbox>
 
 <!-- OpenAI Speech Settings -->
 <vbox class="main-section" 
       id="__addonRef__-openai">
-    <label id="__addonRef__-openai-header">
-        <html:h1 data-l10n-id="pref-sect-openai"></html:h1>
-    </label>
+    <html:details open="open">
+        <html:summary id="__addonRef__-openai-header">
+            <html:h2 data-l10n-id="pref-sect-openai"></html:h2>
+        </html:summary>
+        <vbox class="settings-content">
     <html:p id="openai-status"
             data-l10n-id="pref-status-unknown"
             style="text-align:center; color:tomato !important; font-weight:bold;">
@@ -597,14 +622,19 @@
                  data-l10n-id="pref-openai-testVoice">
     </html:button>
 
+
+        </vbox>
+    </html:details>
 </vbox>
 
 <!-- Local Speech Settings -->
 <vbox class="main-section" 
       id="__addonRef__-local">
-    <label id="__addonRef__-local-header">
-        <html:h1 data-l10n-id="pref-sect-local"></html:h1>
-    </label>
+    <html:details open="open">
+        <html:summary id="__addonRef__-local-header">
+            <html:h2 data-l10n-id="pref-sect-local"></html:h2>
+        </html:summary>
+        <vbox class="settings-content">
     <html:p id="local-status"
             data-l10n-id="pref-status-unknown"
             style="text-align:center; color:tomato !important; font-weight:bold;">
@@ -706,14 +736,19 @@
                  data-l10n-id="pref-local-testVoice">
     </html:button>
 
+
+        </vbox>
+    </html:details>
 </vbox>
 
 <!-- Kokoro TTS Settings -->
 <vbox class="main-section"
       id="__addonRef__-kokoro">
-    <label id="__addonRef__-kokoro-header">
-        <html:h1 data-l10n-id="pref-sect-kokoro"></html:h1>
-    </label>
+    <html:details open="open">
+        <html:summary id="__addonRef__-kokoro-header">
+            <html:h2 data-l10n-id="pref-sect-kokoro"></html:h2>
+        </html:summary>
+        <vbox class="settings-content">
     <html:p id="kokoro-status"
             data-l10n-id="pref-status-unknown"
             style="text-align:center; color:tomato !important; font-weight:bold;">
@@ -833,12 +868,17 @@
                  data-l10n-id="pref-kokoro-testVoice">
     </html:button>
 
+
+        </vbox>
+    </html:details>
 </vbox>
 
 <vbox class="main-section" id="__addonRef__-shortcuts">
-    <label>
-        <html:h1 data-l10n-id="pref-sect-shortcuts"></html:h1>
-    </label>
+    <html:details open="open">
+        <html:summary>
+            <html:h2 data-l10n-id="pref-sect-shortcuts"></html:h2>
+        </html:summary>
+        <vbox class="settings-content">
 
     <label for="__addonRef__-shortcuts-grid">
         <html:h4 data-l10n-id="pref-subsect-shortcuts-keys"
@@ -967,6 +1007,9 @@
         </radiogroup>
     </html:div>
 
+
+        </vbox>
+    </html:details>
 </vbox>
 
 </vbox>
