@@ -56,6 +56,23 @@ for (const engine of ['local', 'openai', 'kokoro']) {
   assert.ok(s.prefetchInProgress.has(1),'old catch must not delete new index');assert.equal(h.addon.data.tts.state,'playing');
  });
 }
+for (const engine of ['local', 'openai', 'kokoro']) {
+ test(engine+' pending prefetch cannot interrupt replay', async()=>{
+  const h=harness(engine),s=new h.mod.Synth();
+  const run=s.speak('x'.repeat(engine==='kokoro'?400:800));await tick();
+  const first=h.requests.findIndex(r=>JSON.parse(r.options.body).input.length===(engine==='kokoro'?160:250));
+  h.resolve(first,'first');await run;await tick();
+  const next=h.requests.findIndex((r,i)=>i!==first);
+  h.audios[0].onended();await tick();
+  await s.replaySection();
+  assert.equal(h.played.length,2);
+  h.resolve(next,'second');await tick();
+  assert.equal(h.played.length,2,'prefetch must not replace active replay');
+  h.audios[0].onended();await tick();
+  assert.equal(h.played.length,3);
+  assert.equal(await h.played.blobs[2].text(),'second');
+ });
+}
 test('kokoro failed prefetch does not leave the player waiting forever',async()=>{
  const h=harness('kokoro'),s=new h.mod.Synth();const run=s.speak('x'.repeat(400));await tick();h.resolve(0);await run;await tick();
  h.audios[0].onended();h.requests[1].reject(new Error('failed'));await tick();assert.equal(h.addon.data.tts.state,'idle');

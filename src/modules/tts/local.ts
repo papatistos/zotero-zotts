@@ -526,6 +526,8 @@ class LocalSynthesizer {
     }
 
     private async playCachedSection(startIndex?: number): Promise<void> {
+        // Cached playback is active again; arriving prefetch must wait for its end.
+        this.waitingForPrefetch = false;
         if (!this.sessionCache || this.sessionCache.sections.length === 0) {
             this.cachePlaybackActive = false;
             addon.data.tts.state = "idle";
