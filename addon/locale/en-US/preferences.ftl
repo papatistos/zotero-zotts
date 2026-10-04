@@ -89,7 +89,7 @@ pref-kokoro-testText = Test sentence:
 pref-kokoro-testVoice = Test Voice
 
 # === Ignore Annotations
-pref-sect-ignoreAnnotations = Ignore Annotations
+pref-sect-ignoreAnnotations = Per document ommissions
 
 pref-ignoreAnnotations-description = Highlight headers, footers, or other text to ignore with the selected color. The plugin will automatically remove matching text (with numbers generalized) from all speech output.
 
@@ -135,7 +135,7 @@ pref-shiftMod-swapSpeakSelection-true =
     .label = Speak from the selected text to the end
 
 # === Advanced
-pref-sect-advanced = Advanced
+pref-sect-advanced = Substitutions & omissions
 
 # --- Substitutions
 pref-subsect-advanced-subs = Substitutions
