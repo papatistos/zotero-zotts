@@ -7,7 +7,7 @@ const {load,root}=require('./helpers.cjs');
 const config=require('../package.json').config;
 test('toolkit reader listeners belong to ZoTTS before construction and disappear on disable/reload',()=>{
  const events=[];
- const Zotero={Utilities:{randomString:()=> 'fixture'},getMainWindows:()=>[],Reader:{_readers:[],registerEventListener:(type,callback,id)=>events.push({type,callback,id}),_unregisterEventListenerByPluginID:id=>{for(let i=events.length-1;i>=0;i--)if(events[i].id===id)events.splice(i,1);}}};
+ const Zotero={debug(){},logError(){},Utilities:{randomString:()=> 'fixture'},getMainWindows:()=>[],Reader:{_readers:[],registerEventListener:(type,callback,id)=>events.push({type,callback,id}),_unregisterEventListenerByPluginID:id=>{for(let i=events.length-1;i>=0;i--)if(events[i].id===id)events.splice(i,1);}}};
  const code=esbuild.buildSync({stdin:{contents:'import {BasicTool,KeyboardManager} from "zotero-plugin-toolkit"; globalThis.tools={BasicTool,KeyboardManager};',resolveDir:root},bundle:true,write:false,platform:'browser',format:'iife'}).outputFiles[0].text;
  const ctx={Zotero};vm.runInNewContext(code,ctx);
  // Avoid unrelated plugin-bridge wiring, but execute the pinned KeyboardManager constructor and registration.
@@ -30,6 +30,8 @@ test('toolkit reader listeners belong to ZoTTS before construction and disappear
   Zotero.Reader._readers.push(reader);
   addon.data.ztoolkit.Keyboard._initKeyboardListener(frame);
   assert.equal(listeners.size,2);
+  const closedFrame={addEventListener(){},removeEventListener(){throw new Error('dead reader window');}};
+  addon.data.ztoolkit.Keyboard._initKeyboardListener(closedFrame);
   Zotero.Reader._unregisterEventListenerByPluginID(config.addonID);addon.data.ztoolkit.unregisterAll();
   assert.equal(listeners.size,0,'reader DOM keyboard listeners must also be removed');
   addon.data.ztoolkit.Keyboard._initKeyboardListener(frame);

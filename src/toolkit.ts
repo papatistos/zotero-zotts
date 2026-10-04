@@ -40,7 +40,12 @@ export class ZoTTSToolkit extends BasicTool {
     public unregisterAll(): void {
         this.disposed = true;
         for (const win of this.readerKeyboardWindows) {
-            this.keyboardInternals.unInitKeyboardListener(win);
+            try {
+                this.keyboardInternals.unInitKeyboardListener(win);
+            } catch (error) {
+                // Reader frames may have closed since the keyboard listeners were attached.
+                this.log(`Reader keyboard cleanup: ${error}`);
+            }
         }
         this.readerKeyboardWindows.clear();
         unregister(this);
