@@ -1,6 +1,9 @@
 import { getPref, setPref } from "../utils/prefs"
 import { retryUntilAsync, waitUtilAsync } from "../utils/wait";
 
+let speechSessionId = 0;
+let activeUtterance: SpeechSynthesisUtterance | null = null;
+
 function speak(text: string) {
     // cancel is safe to call even when not speaking
     if (getPref("newItemBehaviour") === "cancel") {
@@ -45,6 +48,9 @@ function speak(text: string) {
 }
 
 function stop() {
+    speechSessionId++;
+    activeUtterance = null;
+    addon.data.tts.state = "idle"
     if (Zotero.isLinux) {
         // clear queue to prevent playing in the future
         addon.data.tts.engines["webSpeech"].extras.linuxQueue = []
@@ -194,6 +200,7 @@ function trySetVoiceIfNone() {
 function speakInternal(text: string) {
     // TODO: issue - split really long strings before handing off to OS, GH issue #173
 
+    const sessionId = speechSessionId;
     let utt = new window.SpeechSynthesisUtterance(text)
 
     // set attributes for utterance
@@ -203,12 +210,24 @@ function speakInternal(text: string) {
     utt.voice = getVoice(getPref("webSpeech.voice") as string)
 
     // manage reflecting state into addon
-    utt.onstart = () => {addon.data.tts.state = "playing"}
-    utt.onend = () => {
-        handleEnd()
+    const isCurrent = () => sessionId === speechSessionId && activeUtterance === utt;
+    utt.onstart = () => {
+        if (sessionId !== speechSessionId) return;
+        activeUtterance = utt;
+        addon.data.tts.state = "playing";
     }
-    utt.onpause = () => {addon.data.tts.state = "paused"}
-    utt.onresume = () => {addon.data.tts.state = "playing"}
+    utt.onend = () => {
+        if (!isCurrent()) return;
+        activeUtterance = null;
+        handleEnd();
+    }
+    utt.onpause = () => { if (isCurrent()) addon.data.tts.state = "paused"; }
+    utt.onresume = () => { if (isCurrent()) addon.data.tts.state = "playing"; }
+    utt.onerror = () => {
+        // Some synthesis errors occur before onstart.
+        if (sessionId !== speechSessionId || (activeUtterance && activeUtterance !== utt)) return;
+        stop();
+    }
 
     // TODO: future - add "highlight as you hear" feature to highlight text as it's spoken?
     // utt.onmark triggers on word and sentence boundaries
