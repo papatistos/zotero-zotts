@@ -1,6 +1,6 @@
 {
   "name": "zotero-zotts",
-  "version": "1.6.3",
+  "version": "1.6.4",
   "description": "Zotero ZoTTS",
   "config": {
     "addonName": "ZoTTS",
@@ -28,7 +28,7 @@
   },
   "homepage": "",
   "dependencies": {
-    "zotero-plugin-toolkit": "5.1.4"
+    "zotero-plugin-toolkit": "5.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.8",
