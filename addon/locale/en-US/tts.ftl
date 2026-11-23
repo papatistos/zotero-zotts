@@ -3,6 +3,7 @@
 ttsEngine-engineName = { $engine ->
     [webSpeech] System voices
     [azure] Azure Speech
+    [google] Google Cloud Text-to-Speech
     [openai] OpenAI Speech
     [local] Local TTS
     [kokoro] Kokoro TTS
@@ -30,6 +31,16 @@ ttsEngine-errorCause = { $engine ->
         [auth-failed] Authentication failed (check subscription key)
         [connection-failed] Failed to connect to Azure service
         [connection-closed] Connection to Azure service was unexpectedly closed
+        [playback-unsupported] Audio playback is not available in this Zotero version
+        [playback-failed] Audio playback failed
+        *[other] Unknown Error
+    }
+    [google] { $cause ->
+        [config-incomplete] API key, language or voice not configured (set them in preferences)
+        [auth-failed] Authentication failed (check the API key and that the Text-to-Speech API is enabled)
+        [connection-failed] Failed to connect to Google Cloud
+        [rate-limited] Rate limit or quota exceeded (wait and try again)
+        [api-error] Google Cloud returned an error
         [playback-unsupported] Audio playback is not available in this Zotero version
         [playback-failed] Audio playback failed
         *[other] Unknown Error
@@ -69,6 +80,11 @@ ttsEngine-settingsFormatted = { $engine ->
         Pitch: { $pitch }
     [azure]
         Region: { $region },
+        Language: { $language },
+        Voice: { $voice },
+        Volume: { $volume },
+        Rate: { $rate }
+    [google]
         Language: { $language },
         Voice: { $voice },
         Volume: { $volume },

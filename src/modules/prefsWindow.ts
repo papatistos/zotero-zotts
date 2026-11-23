@@ -8,6 +8,10 @@ let azureVoicesCache: any[] | null = null;
 let lastAzureKey: string = "";
 let lastAzureRegion: string = "";
 
+// Google voices cache (in-memory, cleared on reload)
+let googleVoicesCache: any[] | null = null;
+let lastGoogleKey: string = "";
+
 // OpenAI cache
 let lastOpenAIKey: string = "";
 
@@ -89,6 +93,17 @@ async function getAzureConfigLazy(): Promise<{ key: string; region: string }> {
     };
 }
 
+async function getGoogleConfigLazy(): Promise<{ apiKey: string }> {
+    const googleModule = addon.data.tts.engines["google"]?.extras;
+    if (googleModule?.getGoogleConfig) {
+        return googleModule.getGoogleConfig();
+    }
+    // Fallback: read from prefs directly
+    return {
+        apiKey: (getPref("google.apiKey") as string || "").trim()
+    };
+}
+
 async function getOpenAIConfigLazy(): Promise<{ apiKey: string }> {
     const openaiModule = addon.data.tts.engines["openai"]?.extras;
     if (openaiModule?.getOpenAIConfig) {
@@ -151,6 +166,9 @@ function prefsLoadHook(type: string, doc: Document) {
     // Initialize Azure voices (async, but we don't wait for it)
     updateAzureVoices(doc);
 
+    // Initialize Google voices (async, but we don't wait for it)
+    updateGoogleVoices(doc);
+
     // shortcuts section modelled on core Zotero
     for (let label of Array.from(doc.querySelectorAll(".modifier")) as Element[]) {
         // Display the appropriate modifier keys for the platform
@@ -181,6 +199,12 @@ function prefsLoadHook(type: string, doc: Document) {
     const azureTestText = doc.getElementById("azure-testText") as HTMLInputElement;
     if (azureTestText) {
         azureTestText.value = getString("speak-testVoice");
+    }
+
+    // set default test text for Google
+    const googleTestText = doc.getElementById("google-testText") as HTMLInputElement;
+    if (googleTestText) {
+        googleTestText.value = getString("speak-testVoice");
     }
 
     // set default test text for OpenAI
@@ -226,6 +250,12 @@ function prefsRefreshHook(type: string, doc: Document) {
         updateTestVoiceButtons(doc)
     } else if (type === "azure-minSegmentSize-change") {
         handleAzureMinSegmentSizeChange(doc)
+    } else if (type === "google-key-change") {
+        handleGoogleKeyChange(doc)
+    } else if (type === "google-language-change") {
+        handleGoogleLanguageChange(doc)
+    } else if (type === "google-voice-change") {
+        updateTestVoiceButtons(doc)
     } else if (type === "openai-key-change") {
         handleOpenAIKeyChange(doc)
     } else if (type === "openai-model-change" || type === "openai-voice-change") {
@@ -303,6 +333,9 @@ function updateTTSEngineStatuses(doc: Document) {
 function updateTestVoiceButtons(doc: Document): void {
     // Update Azure Test Voice button (async)
     updateAzureTestVoiceButton(doc);
+
+    // Update Google Test Voice button (async)
+    updateGoogleTestVoiceButton(doc);
 
     // Update OpenAI Test Voice button (async)
     updateOpenAITestVoiceButton(doc);
@@ -572,6 +605,131 @@ function unlockAzureControls(doc: Document): void {
 
     // Update Test Voice button state based on current values
     updateTestVoiceButtons(doc);
+}
+
+// Google voice management functions
+async function updateGoogleTestVoiceButton(doc: Document): Promise<void> {
+    const googleBtn = doc.getElementById("google-testVoice-btn") as HTMLButtonElement;
+    if (!googleBtn) {
+        return;
+    }
+
+    // Prefer the key typed in the UI over the saved configuration
+    const keyInput = doc.getElementById("google-key") as HTMLInputElement;
+    const apiKey = (keyInput?.value || "").trim() || (await getGoogleConfigLazy()).apiKey;
+
+    const languageMenu = doc.getElementById("google-language") as unknown as XULMenuListElement;
+    const voiceMenu = doc.getElementById("google-voice") as unknown as XULMenuListElement;
+    const language = (languageMenu?.value || "").trim();
+    const voice = (voiceMenu?.value || "").trim();
+    const disabled = languageMenu?.hasAttribute("disabled") || voiceMenu?.hasAttribute("disabled");
+
+    if (apiKey && language && voice && !disabled) {
+        googleBtn.removeAttribute("disabled");
+    } else {
+        googleBtn.setAttribute("disabled", "true");
+    }
+}
+
+function handleGoogleKeyChange(doc: Document): void {
+    handleGoogleKeyChangeAsync(doc);
+}
+
+async function handleGoogleKeyChangeAsync(doc: Document): Promise<void> {
+    const { apiKey } = await getGoogleConfigLazy();
+    if (apiKey !== lastGoogleKey) {
+        lastGoogleKey = apiKey;
+        // A different key may see different voices, or none if it is invalid
+        googleVoicesCache = null;
+        updateGoogleVoices(doc);
+    }
+}
+
+function handleGoogleLanguageChange(doc: Document): void {
+    const languageMenu = doc.getElementById("google-language") as unknown as XULMenuListElement;
+    const language = languageMenu?.value;
+    if (googleVoicesCache && language) {
+        populateGoogleVoices(doc, googleVoicesCache, language);
+        updateTestVoiceButtons(doc);
+    }
+}
+
+async function updateGoogleVoices(doc: Document): Promise<void> {
+    if (!googleVoicesCache) {
+        const { apiKey } = await getGoogleConfigLazy();
+        lastGoogleKey = apiKey;
+        const googleModule = addon.data.tts.engines["google"]?.extras;
+        if (!apiKey || !googleModule?.getAllVoices) {
+            setGoogleControlsLocked(doc, true);
+            return;
+        }
+
+        const result = await googleModule.getAllVoices();
+        if (!result.success || result.voices.length === 0) {
+            setGoogleControlsLocked(doc, true);
+            return;
+        }
+        googleVoicesCache = result.voices;
+    }
+
+    setGoogleControlsLocked(doc, false);
+    populateGoogleLanguages(doc, googleVoicesCache!);
+    const currentLang = getPref("google.language") as string;
+    if (currentLang) {
+        populateGoogleVoices(doc, googleVoicesCache!, currentLang);
+    }
+    updateTestVoiceButtons(doc);
+}
+
+function fillMenu(doc: Document, menuId: string, values: string[], current: string): void {
+    const menu = doc.getElementById(menuId) as unknown as XULMenuListElement;
+    const popup = doc.getElementById(`${menuId}-popup`);
+    if (!menu || !popup) {
+        return;
+    }
+
+    popup.innerHTML = '';
+    values.forEach((value: string) => {
+        const item = doc.createXULElement("menuitem");
+        item.setAttribute("label", value);
+        item.setAttribute("value", value);
+        popup.appendChild(item);
+    });
+
+    if (current && values.includes(current)) {
+        menu.value = current;
+    } else {
+        // Value not in list, show empty but don't modify pref
+        menu.selectedIndex = -1;
+    }
+}
+
+function populateGoogleLanguages(doc: Document, voices: any[]): void {
+    const googleModule = addon.data.tts.engines["google"]?.extras;
+    if (googleModule?.extractLanguages) {
+        fillMenu(doc, "google-language", googleModule.extractLanguages(voices), getPref("google.language") as string);
+    }
+}
+
+function populateGoogleVoices(doc: Document, voices: any[], language: string): void {
+    const googleModule = addon.data.tts.engines["google"]?.extras;
+    if (googleModule?.filterVoicesByLanguage) {
+        fillMenu(doc, "google-voice", googleModule.filterVoicesByLanguage(voices, language), getPref("google.voice") as string);
+    }
+}
+
+function setGoogleControlsLocked(doc: Document, locked: boolean): void {
+    const ids = locked
+        ? ["google-language", "google-voice", "google-testVoice-btn"]
+        : ["google-language", "google-voice"];
+    for (const id of ids) {
+        const element = doc.getElementById(id);
+        if (locked) {
+            element?.setAttribute("disabled", "true");
+        } else {
+            element?.removeAttribute("disabled");
+        }
+    }
 }
 
 // OpenAI control management functions

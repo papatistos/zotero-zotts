@@ -76,6 +76,40 @@ async function initEngines(addon: Addon) {
       }
     )
 
+    let googlePromise = import("./google").then(
+      (e) => {
+          e.setDefaultPrefs()
+
+          addon.data.tts.engines["google"] = {
+              status: "loading",
+              speak: e.speak,
+              stop: e.stop,
+              canPause: true,
+              pause: e.pause,
+              resume: e.resume,
+              extras: {
+                  getGoogleConfig: e.getGoogleConfig,
+                  getAllVoices: e.getAllVoices,
+                  extractLanguages: e.extractLanguages,
+                  filterVoicesByLanguage: e.filterVoicesByLanguage,
+                  dispose: e.dispose
+              }
+          }
+
+          return e
+      }
+    ).then(
+      async (e) => {
+          await e.initEngine()
+          addon.data.tts.engines["google"].status = "ready"
+      }
+    ).catch(
+      (e) => {
+          addon.data.tts.engines["google"].errorMsg = e
+          addon.data.tts.engines["google"].status = "error"
+      }
+    )
+
     let openaiPromise = import("./openai").then(
       (e) => {
           e.setDefaultPrefs()
@@ -182,7 +216,6 @@ async function initEngines(addon: Addon) {
     )
 
     // TODO: future - implement more engines
-    //   Google?
     //   OS native (macOS, Windows, Linux) but not WSA?
     //   etc
 
@@ -190,6 +223,7 @@ async function initEngines(addon: Addon) {
         await Promise.any([
             wsaPromise,
             azurePromise,
+            googlePromise,
             openaiPromise,
             localPromise,
             kokoroPromise,

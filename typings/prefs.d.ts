@@ -22,6 +22,11 @@ declare namespace _ZoteroTypes {
       "azure.volume": number;
       "azure.rate": number;
       "azure.minSegmentSize": number;
+      "google.apiKey": string;
+      "google.language": string;
+      "google.voice": string;
+      "google.volume": number;
+      "google.rate": number;
       "openai.apiKey": string;
       "openai.model": string;
       "openai.voice": string;

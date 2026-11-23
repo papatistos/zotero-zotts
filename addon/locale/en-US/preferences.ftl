@@ -15,6 +15,8 @@ pref-general-engine-webSpeech =
     .label = System voices
 pref-general-engine-azure =
     .label = Azure Speech
+pref-general-engine-google =
+    .label = Google Cloud Text-to-Speech
 pref-general-engine-openai =
     .label = OpenAI Speech
 pref-general-engine-local =
@@ -53,6 +55,17 @@ pref-azure-rate = Rate
 pref-azure-minSegmentSize = Playback Preload Amount
 pref-azure-testText = Test sentence:
 pref-azure-testVoice = Test Voice
+
+# === Google Cloud Text-to-Speech
+pref-sect-google = Google Cloud Text-to-Speech
+
+pref-google-key = API Key
+pref-google-language = Language
+pref-google-voice = Voice
+pref-google-volume = Volume
+pref-google-rate = Rate
+pref-google-testText = Test sentence:
+pref-google-testVoice = Test Voice
 
 # === OpenAI Speech
 pref-sect-openai = OpenAI Speech

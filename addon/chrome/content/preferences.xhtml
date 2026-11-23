@@ -238,6 +238,9 @@
             <radio id="engine-azure"
                    data-l10n-id="pref-general-engine-azure"
                    value="azure"/>
+            <radio id="engine-google"
+                   data-l10n-id="pref-general-engine-google"
+                   value="google"/>
             <radio id="engine-openai"
                    data-l10n-id="pref-general-engine-openai"
                    value="openai"/>
@@ -493,6 +496,124 @@
     <html:button id="azure-testVoice-btn"
                  onclick="Zotero.__addonInstance__.hooks.onSpeakTest('azure', window.document.getElementById('azure-testText').value)"
                  data-l10n-id="pref-azure-testVoice">
+    </html:button>
+
+
+        </vbox>
+    </html:details>
+</vbox>
+
+<!-- Google Cloud Text-to-Speech Settings -->
+<vbox class="main-section" 
+      id="__addonRef__-google">
+    <html:details open="open">
+        <html:summary id="__addonRef__-google-header">
+            <html:h2 data-l10n-id="pref-sect-google"></html:h2>
+        </html:summary>
+        <vbox class="settings-content">
+    <html:p id="google-status"
+            data-l10n-id="pref-status-unknown"
+            style="text-align:center; color:tomato !important; font-weight:bold;">
+    </html:p>
+
+    <!-- API Key -->
+    <vbox>
+        <html:label data-l10n-id="pref-google-key"
+                    for="google-key">
+        </html:label>
+        <html:input id="google-key"
+                    type="password"
+                    preference="__prefsPrefix__.google.apiKey"
+                    onchange="Zotero.__addonInstance__.hooks.onPrefsRefresh('google-key-change', window.document)"
+        />
+    </vbox>
+
+    <!-- Language -->
+    <vbox>
+        <html:label data-l10n-id="pref-google-language"
+                    for="google-language">
+        </html:label>
+        <menulist id="google-language"
+                  preference="__prefsPrefix__.google.language"
+                  oncommand="Zotero.__addonInstance__.hooks.onPrefsRefresh('google-language-change', window.document)">
+            <menupopup id="google-language-popup">
+                <!-- populate at runtime -->
+            </menupopup>
+        </menulist>
+    </vbox>
+
+    <!-- Voice -->
+    <vbox>
+        <html:label data-l10n-id="pref-google-voice"
+                    for="google-voice">
+        </html:label>
+        <menulist id="google-voice"
+                  preference="__prefsPrefix__.google.voice"
+                  oncommand="Zotero.__addonInstance__.hooks.onPrefsRefresh('google-voice-change', window.document)">
+            <menupopup id="google-voice-popup">
+                <!-- populate at runtime -->
+            </menupopup>
+        </menulist>
+    </vbox>
+
+    <!-- Volume -->
+    <vbox>
+        <hbox align="center">
+            <html:label data-l10n-id="pref-google-volume"
+                        for="google-volume">
+            </html:label>
+            <html:input preference="__prefsPrefix__.google.volume"
+                        readonly="true"
+                        value="100"
+                        style="width:30px"
+            />
+        </hbox>
+        <html:input type="range"
+                    id="google-volume"
+                    min="0"
+                    max="100"
+                    value="100"
+                    preference="__prefsPrefix__.google.volume"
+                    style="width:50%"
+        />
+    </vbox>
+
+    <!-- Rate -->
+    <vbox>
+        <hbox align="center">
+            <html:label data-l10n-id="pref-google-rate"
+                        for="google-rate">
+            </html:label>
+            <html:input preference="__prefsPrefix__.google.rate"
+                        readonly="true"
+                        value="100"
+                        style="width:30px"
+            />
+        </hbox>
+        <html:input type="range"
+                    id="google-rate"
+                    min="25"
+                    max="400"
+                    value="100"
+                    preference="__prefsPrefix__.google.rate"
+                    style="width:50%"
+        />
+    </vbox>
+
+    <!-- Test Text Input -->
+    <vbox>
+        <html:label data-l10n-id="pref-google-testText"
+                    for="google-testText">
+        </html:label>
+        <html:input id="google-testText"
+                    type="text"
+        />
+    </vbox>
+
+    <!-- Test Voice Button -->
+    <html:button id="google-testVoice-btn"
+                 onclick="Zotero.__addonInstance__.hooks.onSpeakTest('google', window.document.getElementById('google-testText').value)"
+                 data-l10n-id="pref-google-testVoice">
     </html:button>
 
 

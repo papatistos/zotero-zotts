@@ -83,6 +83,7 @@ function constructFav() {
     const settings: Record<string, string[]> = {
         webSpeech: ["voice", "pitch", "rate", "volume"],
         azure: ["voice", "language", "rate", "volume", "minSegmentSize"],
+        google: ["voice", "language", "rate", "volume"],
         openai: ["voice", "model", "rate", "volume"],
         local: ["apiUrl", "voice", "model", "rate", "volume"],
         kokoro: ["apiUrl", "voice", "model", "language", "rate", "volume"],

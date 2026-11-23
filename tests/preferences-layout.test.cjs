@@ -20,7 +20,7 @@ test('settings order and omission subsection retain their bindings in valid mixe
     const sections = elements(pane).filter(node => node.getAttribute('class') === 'main-section');
     assert.deepEqual(sections.map(node => node.getAttribute('id')), [
         'zotts-favourites', 'zotts-advanced', 'zotts-general', 'zotts-webSpeech',
-        'zotts-azure', 'zotts-openai', 'zotts-local', 'zotts-kokoro', 'zotts-shortcuts',
+        'zotts-azure', 'zotts-google', 'zotts-openai', 'zotts-local', 'zotts-kokoro', 'zotts-shortcuts',
     ]);
     const advanced = doc.getElementById('zotts-advanced');
     const annotations = doc.getElementById('zotts-ignore-annotations');
@@ -90,7 +90,7 @@ test('the preferences registration loads scoped disclosure styling', () => {
 test('load and substitution refresh initialize attached controls while every disclosure is collapsed', async () => {
     const doc = parse();
     const disclosures = Array.from(doc.getElementsByTagNameNS(HTML, 'details'));
-    assert.equal(disclosures.length, 9);
+    assert.equal(disclosures.length, 10);
     for (const details of disclosures) details.removeAttribute('open');
     for (const node of Array.from(doc.getElementsByTagName('*'))) {
         node.style = {};
