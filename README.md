@@ -19,7 +19,7 @@ ZoTTS is a Zotero plugin to add TTS functionality
 
 ## Install :rocket:
 
-This fork does not provide releases. To install it, obtain or build an `.xpi` file.
+Download `zo-tts.xpi` from the latest release of this fork on its [releases page](https://github.com/papatistos/zotero-zotts/releases).
 
 1. Save the `.xpi` file on your computer.
 2. In Zotero, go to `Tools > Plugins`
@@ -27,7 +27,7 @@ This fork does not provide releases. To install it, obtain or build an `.xpi` fi
 4. Select `Install Add-on From File...`
 5. Browse to the downloaded .xpi file and select it
 
-Install newer `.xpi` files manually using the same steps.
+Zotero then updates the plugin automatically from this fork's releases. Versions installed before 1.6.5 check the original repository instead, so install 1.6.5 or later once by hand.
 
 > [!TIP]
 > If you want some information about finding more voices for ZoTTS, please see [this documentation](docs/BETTER_VOICES.md).
