@@ -8,6 +8,7 @@ ZoTTS is a Zotero plugin to add TTS functionality
 > This is a fork of [the original repository](https://github.com/ImperialSquid/zotero-zotts/) (via https://github.com/KanaHayama/zotero-zotts). 
 >
 > This version adds
+> - support for Google Cloud Text-to-Speech,
 > - support for OpenAI's TTS engine,
 > - support for a local TTS engine via an OpenAI-compatible API,
 > - a dedicated Kokoro TTS engine for kokoro-web / [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI) with dynamic language, model and voice loading,
@@ -71,7 +72,8 @@ The settings sections are collapsible and start expanded. Favourites is the firs
 - Favourites save speech presets with an engine, voice and related settings. Cloud API keys are not saved in favourites. You can create presets for different languages and cycle between presets with `Ctrl/Cmd + Shift + Q`.
 - Substitutions & omissions lets you replace text before speaking it, using plain text or regular expressions. Its "Per document ommissions" subsection lets you omit text marked with annotations of a chosen colour, such as page numbers in headers or footers.
 - Queueing settings let you choose whether a new speech request joins the queue or cancels the current speech.
-- Voice settings let you choose System Voices, Azure TTS, OpenAI TTS, the Local OpenAI-compatible engine or the dedicated Kokoro engine. System Voices uses your computer's installed voices without requiring a cloud TTS service. Rate, pitch and volume controls are available where the engine supports them.
+- Voice settings let you choose System Voices, Azure TTS, Google Cloud Text-to-Speech, OpenAI TTS, the Local OpenAI-compatible engine or the dedicated Kokoro engine. System Voices uses your computer's installed voices without requiring a cloud TTS service. Rate, pitch and volume controls are available where the engine supports them.
+- The Google engine needs an API key from a Google Cloud project that has billing and the Cloud Text-to-Speech API enabled. Create the key under APIs & Services > Credentials, ideally restricted to the Text-to-Speech API, and paste it into the API Key field (or set the `GOOGLE_TTS_API_KEY` environment variable). The language and voice lists load once the key works. Chirp 3 HD voices accept rates up to 200%, other voices up to 400%.
 - The Local engine has a model field. The Kokoro engine can auto-detect the API base URL and load available languages, models and voices from the server.
 - Shortcut settings let you rebind the speak, pause and cancel shortcuts and swap the behaviour of `Ctrl/Cmd + S` and `Ctrl/Cmd + Shift + S`.
 
