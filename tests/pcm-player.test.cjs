@@ -21,21 +21,25 @@ function harness({audioContext = true} = {}) {
         resume() {this.state = 'running'; return Promise.resolve();}
         close() {this.state = 'closed'; return Promise.resolve();}
     }
-    const imports = {
-        '../utils/prefs': prefs({'azure.volume': 80}),
-        '../utils/notify': {notifyGeneric(lines) {notices.push(lines);}},
-        '../utils/locale': {getString: (id, opts) => opts?.args?.cause ?? id},
+    const utils = {
+        prefs: prefs({'azure.volume': 80}),
+        notify: {notifyGeneric(lines) {notices.push(lines);}},
+        locale: {getString: (id, opts) => opts?.args?.cause ?? id},
     };
-    const mod = load('src/modules/tts/azure.ts', imports,
-        {window: audioContext ? {AudioContext} : {}, addon, ztoolkit: {log() {}}, setTimeout},
-        'exports.Player = AudioPlayer; exports.buildSsml = buildSsml;');
-    return {Player: mod.Player, buildSsml: mod.buildSsml, contexts, notices, addon};
+    const globals = {window: audioContext ? {AudioContext} : {}, addon, ztoolkit: {log() {}}, setTimeout};
+    const player = load('src/modules/utils/pcmPlayer.ts',
+        {'./prefs': utils.prefs, './notify': utils.notify, './locale': utils.locale}, globals);
+    const azure = load('src/modules/tts/azure.ts',
+        {'../utils/prefs': utils.prefs, '../utils/notify': utils.notify, '../utils/locale': utils.locale, '../utils/pcmPlayer': player},
+        globals, 'exports.buildSsml = buildSsml;');
+    const Player = class extends player.PcmStreamPlayer {constructor() {super('azure');}};
+    return {Player, buildSsml: azure.buildSsml, contexts, notices, addon};
 }
 // 16-bit little-endian PCM samples
 const pcm = (...values) => {const out = new Uint8Array(values.length * 2); const view = new DataView(out.buffer); values.forEach((v, i) => view.setInt16(i * 2, v, true)); return out;};
 const endAll = context => context.sources.filter(s => !s.stopped && s.onended).forEach(s => s.onended());
 
-test('azure schedules each chunk to start exactly where the previous one ends', async () => {
+test('pcm player schedules each chunk to start exactly where the previous one ends', async () => {
     const h = harness(), p = new h.Player();
     p.preloadBytes = 0;
     await p.startStream();
@@ -50,7 +54,7 @@ test('azure schedules each chunk to start exactly where the previous one ends', 
     assert.equal(h.contexts.length, 1);
 });
 
-test('azure decodes 16-bit PCM across chunks that split a sample', async () => {
+test('pcm player decodes 16-bit PCM across chunks that split a sample', async () => {
     const h = harness(), p = new h.Player();
     await p.startStream();
     const bytes = pcm(16384, -32768, 32767);
@@ -60,7 +64,7 @@ test('azure decodes 16-bit PCM across chunks that split a sample', async () => {
     assert.deepEqual(samples, [0.5, -1, 32767 / 32768]);
 });
 
-test('azure waits for the preload amount before scheduling audio', async () => {
+test('pcm player waits for the preload amount before scheduling audio', async () => {
     const h = harness(), p = new h.Player();
     p.preloadBytes = 8;
     await p.startStream();
@@ -71,7 +75,7 @@ test('azure waits for the preload amount before scheduling audio', async () => {
     assert.equal(h.contexts[0].gain.gain.value, 0.8);
 });
 
-test('azure reports completion once after the last scheduled audio ends', async () => {
+test('pcm player reports completion once after the last scheduled audio ends', async () => {
     const h = harness(), p = new h.Player();
     let done = 0;
     p.setOnCompleteCallback(() => done++);
@@ -85,7 +89,7 @@ test('azure reports completion once after the last scheduled audio ends', async 
     assert.equal(done, 1);
 });
 
-test('azure completes immediately when Azure returned no audio', async () => {
+test('pcm player completes immediately when the engine returned no audio', async () => {
     const h = harness(), p = new h.Player();
     let done = 0;
     p.setOnCompleteCallback(() => done++);
@@ -94,7 +98,7 @@ test('azure completes immediately when Azure returned no audio', async () => {
     assert.equal(done, 1);
 });
 
-test('azure stop silences scheduled audio and ignores its late end events', async () => {
+test('pcm player stop silences scheduled audio and ignores its late end events', async () => {
     const h = harness(), p = new h.Player();
     let done = 0;
     p.setOnCompleteCallback(() => done++);
@@ -110,7 +114,7 @@ test('azure stop silences scheduled audio and ignores its late end events', asyn
     assert.equal(h.addon.data.tts.state, 'idle');
 });
 
-test('azure pause suspends the clock and resume continues it', async () => {
+test('pcm player pause suspends the clock and resume continues it', async () => {
     const h = harness(), p = new h.Player();
     await p.startStream();
     await p.queueAudioChunk(pcm(1, 2));
@@ -122,7 +126,7 @@ test('azure pause suspends the clock and resume continues it', async () => {
     assert.equal(h.addon.data.tts.state, 'playing');
 });
 
-test('azure pause before playback starts defers scheduling until resume', async () => {
+test('pcm player pause before playback starts defers scheduling until resume', async () => {
     const h = harness(), p = new h.Player();
     p.preloadBytes = 2;
     await p.startStream();
@@ -133,7 +137,7 @@ test('azure pause before playback starts defers scheduling until resume', async 
     assert.equal(h.contexts[0].sources.length, 1);
 });
 
-test('azure reports missing Web Audio instead of playing nothing', async () => {
+test('pcm player reports missing Web Audio instead of playing nothing', async () => {
     const h = harness({audioContext: false}), p = new h.Player();
     await assert.rejects(p.startStream(), /playback-unsupported/);
 });
