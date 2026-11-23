@@ -9,6 +9,7 @@ ZoTTS is a Zotero plugin to add TTS functionality
 >
 > This version adds
 > - support for Google Cloud Text-to-Speech,
+> - gapless Azure TTS playback, with the speaking rate applied by Azure so voices keep their natural pitch,
 > - support for OpenAI's TTS engine,
 > - support for a local TTS engine via an OpenAI-compatible API,
 > - a dedicated Kokoro TTS engine for kokoro-web / [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI) with dynamic language, model and voice loading,
@@ -19,7 +20,7 @@ ZoTTS is a Zotero plugin to add TTS functionality
 
 ## Install :rocket:
 
-Download `zo-tts.xpi` from the latest release of this fork on its [releases page](https://github.com/papatistos/zotero-zotts/releases).
+Download `zo-tts.xpi` from the [latest release](https://github.com/papatistos/zotero-zotts/releases/latest) of this fork.
 
 1. Save the `.xpi` file on your computer.
 2. In Zotero, go to `Tools > Plugins`
@@ -27,7 +28,7 @@ Download `zo-tts.xpi` from the latest release of this fork on its [releases page
 4. Select `Install Add-on From File...`
 5. Browse to the downloaded .xpi file and select it
 
-Zotero then updates the plugin automatically from this fork's releases. Versions installed before 1.6.5 check the original repository instead, so install 1.6.5 or later once by hand.
+Zotero then updates the plugin automatically from this fork's releases. Versions before 1.6.5 check the original repository for updates instead. If you have one of those versions, install 1.6.5 or later by hand once, and your settings carry over.
 
 > [!TIP]
 > If you want some information about finding more voices for ZoTTS, please see [this documentation](docs/BETTER_VOICES.md).
