@@ -19,12 +19,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ImperialSquid/zotero-zotts.git"
+    "url": "https://github.com/papatistos/zotero-zotts.git"
   },
   "author": "ImperialSquid",
   "license": "AGPL-3.0-or-later",
   "bugs": {
-    "url": "https://github.com/ImperialSquid/zotero-zotts/issues"
+    "url": "https://github.com/papatistos/zotero-zotts/issues"
   },
   "homepage": "",
   "dependencies": {
