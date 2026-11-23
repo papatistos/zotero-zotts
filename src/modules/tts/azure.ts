@@ -412,26 +412,34 @@ class AzureStreamingSynthesizer {
 
         return new Promise((resolve, reject) => {
             try {
-                this.ws = new window.WebSocket(wsUrl);
-                this.ws.binaryType = "arraybuffer";
+                const socket = new window.WebSocket(wsUrl);
+                socket.binaryType = "arraybuffer";
+                this.ws = socket;
 
-                this.ws.onopen = () => {
+                // Events from a socket that stop() already replaced are ignored
+                socket.onopen = () => {
                     this.isConnected = true;
                     resolve();
                 };
 
-                this.ws.onmessage = async (event) => {
+                socket.onmessage = async (event) => {
+                    if (this.ws !== socket) {
+                        return;
+                    }
                     await this.handleMessage(event.data);
                 };
 
-                this.ws.onerror = (error) => {
+                socket.onerror = (error) => {
                     ztoolkit.log(`WebSocket error: ${error}`);
                     if (!this.isConnected) {
                         reject(new Error("connection-failed"));
                     }
                 };
 
-                this.ws.onclose = (event) => {
+                socket.onclose = (event) => {
+                    if (this.ws !== socket && this.ws !== null) {
+                        return;
+                    }
                     const wasConnected = this.isConnected;
                     this.isConnected = false;
                     // Only notify if connection was previously established and then dropped
@@ -584,6 +592,8 @@ class AzureStreamingSynthesizer {
 
         this.textSplitter.reset();
         this.audioPlayer.stop();
+        // Close the socket so audio still arriving for this request cannot leak into the next one
+        this.disconnect();
         addon.data.tts.state = "idle";
     }
 
