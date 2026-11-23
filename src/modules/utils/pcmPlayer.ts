@@ -92,6 +92,17 @@ export class PcmStreamPlayer {
         }
     }
 
+    // Seconds of received audio that have not been played yet
+    public bufferedSeconds(): number {
+        if (!this.context) {
+            return 0;
+        }
+        if (!this.hasStarted) {
+            return this.receivedBytes / 2 / this.sampleRate;
+        }
+        return Math.max(0, this.nextStartTime - this.context.currentTime);
+    }
+
     public pause(): void {
         if (this.isPaused || addon.data.tts.state === "idle") {
             return;
