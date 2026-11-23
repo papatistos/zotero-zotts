@@ -1,144 +1,149 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {load, prefs} = require('./helpers.cjs');
-const tick = async () => {for (let i = 0; i < 12; i++) await Promise.resolve();};
-const MIME = 'audio/webm; codecs="opus"';
 
-function harness({supported = true} = {}) {
-    const sources = [], audios = [], notices = [], revoked = [];
-    const urls = new Map();
+function harness({audioContext = true} = {}) {
+    const contexts = [], notices = [];
     const addon = {data: {tts: {state: 'playing'}}};
-    class SourceBuffer {
-        constructor() {this.updating = false; this.appends = []; this.listeners = {};}
-        addEventListener(type, fn) {(this.listeners[type] ??= []).push(fn);}
-        appendBuffer(data) {
-            if (this.updating) throw new Error('InvalidStateError: append while updating');
-            this.updating = true;
-            this.appends.push(Buffer.from(data).toString());
+    class AudioContext {
+        constructor() {this.currentTime = 0; this.state = 'running'; this.sources = []; this.destination = {}; contexts.push(this);}
+        createGain() {return this.gain = {gain: {value: 1}, connect() {}};}
+        createBuffer(channels, length, sampleRate) {
+            assert.equal(channels, 1); assert.equal(sampleRate, 24000);
+            return {length, duration: length / sampleRate, copyToChannel(samples) {this.samples = Array.from(samples);}};
         }
-        finishUpdate() {this.updating = false; (this.listeners.updateend || []).forEach(fn => fn());}
+        createBufferSource() {
+            const context = this;
+            const source = {stopped: false, connect() {}, start(when) {this.when = when; context.sources.push(this);}, stop() {this.stopped = true;}};
+            return source;
+        }
+        suspend() {this.state = 'suspended'; return Promise.resolve();}
+        resume() {this.state = 'running'; return Promise.resolve();}
+        close() {this.state = 'closed'; return Promise.resolve();}
     }
-    class MediaSource {
-        static isTypeSupported(type) {return supported && type === MIME;}
-        constructor() {this.readyState = 'closed'; this.listeners = {}; this.endCalls = 0; sources.push(this);}
-        addEventListener(type, fn) {(this.listeners[type] ??= []).push(fn);}
-        open() {this.readyState = 'open'; (this.listeners.sourceopen || []).forEach(fn => fn());}
-        addSourceBuffer(type) {assert.equal(type, MIME); return this.buffer = new SourceBuffer();}
-        endOfStream() {this.endCalls++; this.readyState = 'ended';}
-    }
-    class Audio {
-        constructor() {this._src = ''; this.paused = true; this.plays = 0; this.playbackRate = 1; audios.push(this);}
-        set src(url) {this._src = url; this.playbackRate = 1; const source = urls.get(url); if (source && this.autoOpen !== false) queueMicrotask(() => source.open());}
-        get src() {return this._src;}
-        play() {this.plays++; this.paused = false; return Promise.resolve();}
-        pause() {this.paused = true;}
-        removeAttribute(name) {if (name === 'src') this._src = '';}
-        load() {}
-    }
-    let next = 0;
-    const URL = {
-        createObjectURL(source) {const url = 'blob:' + ++next; urls.set(url, source); return url;},
-        revokeObjectURL(url) {revoked.push(url);},
-    };
     const imports = {
-        '../utils/prefs': prefs({'azure.rate': 131, 'azure.volume': 80}),
+        '../utils/prefs': prefs({'azure.volume': 80}),
         '../utils/notify': {notifyGeneric(lines) {notices.push(lines);}},
         '../utils/locale': {getString: (id, opts) => opts?.args?.cause ?? id},
     };
     const mod = load('src/modules/tts/azure.ts', imports,
-        {window: {Audio, MediaSource}, URL, addon, ztoolkit: {log() {}}, setTimeout},
-        'exports.Player = AudioPlayer;');
-    return {Player: mod.Player, sources, audios, notices, revoked, addon};
+        {window: audioContext ? {AudioContext} : {}, addon, ztoolkit: {log() {}}, setTimeout},
+        'exports.Player = AudioPlayer; exports.buildSsml = buildSsml;');
+    return {Player: mod.Player, buildSsml: mod.buildSsml, contexts, notices, addon};
 }
-const bytes = text => new Uint8Array(Buffer.from(text));
+// 16-bit little-endian PCM samples
+const pcm = (...values) => {const out = new Uint8Array(values.length * 2); const view = new DataView(out.buffer); values.forEach((v, i) => view.setInt16(i * 2, v, true)); return out;};
+const endAll = context => context.sources.filter(s => !s.stopped && s.onended).forEach(s => s.onended());
 
-test('azure streams all chunks into one MediaSource without overlapping appends', async () => {
+test('azure schedules each chunk to start exactly where the previous one ends', async () => {
     const h = harness(), p = new h.Player();
-    p.minSegmentSize = 4;
+    p.preloadBytes = 0;
     await p.startStream();
-    const buffer = h.sources[0].buffer;
-    await p.queueAudioChunk(bytes('ab'));
-    await p.queueAudioChunk(bytes('cd'));
-    await p.queueAudioChunk(bytes('ef'));
-    assert.deepEqual(buffer.appends, ['ab'], 'second append must wait for updateend');
-    buffer.finishUpdate();
-    assert.deepEqual(buffer.appends, ['ab', 'cdef']);
-    assert.equal(h.sources.length, 1, 'one stream, so no file switches');
-    assert.equal(h.audios.length, 1);
+    const context = h.contexts[0];
+    await p.queueAudioChunk(pcm(...new Array(2400).fill(0)));
+    await p.queueAudioChunk(pcm(...new Array(4800).fill(0)));
+    await p.queueAudioChunk(pcm(...new Array(1200).fill(0)));
+    const [a, b, c] = context.sources;
+    assert.equal(a.when, 0.05);
+    assert.equal(b.when, a.when + a.buffer.duration);
+    assert.equal(c.when, b.when + b.buffer.duration);
+    assert.equal(h.contexts.length, 1);
 });
 
-test('azure starts playback only after the preload amount, keeping pitch at the set rate', async () => {
+test('azure decodes 16-bit PCM across chunks that split a sample', async () => {
     const h = harness(), p = new h.Player();
-    p.minSegmentSize = 6;
     await p.startStream();
-    const audio = h.audios[0];
-    await p.queueAudioChunk(bytes('abc'));
-    assert.equal(audio.plays, 0);
-    await p.queueAudioChunk(bytes('def'));
-    assert.equal(audio.plays, 1);
-    assert.equal(audio.playbackRate, 1.31);
-    assert.equal(audio.preservesPitch, true);
-    assert.equal(audio.volume, 0.8);
-    await p.queueAudioChunk(bytes('ghi'));
-    assert.equal(audio.plays, 1, 'later chunks extend the same playback');
+    const bytes = pcm(16384, -32768, 32767);
+    await p.queueAudioChunk(bytes.slice(0, 3));
+    await p.queueAudioChunk(bytes.slice(3));
+    const samples = h.contexts[0].sources.flatMap(s => s.buffer.samples);
+    assert.deepEqual(samples, [0.5, -1, 32767 / 32768]);
 });
 
-test('azure ends the stream after the last append and reports completion once', async () => {
+test('azure waits for the preload amount before scheduling audio', async () => {
+    const h = harness(), p = new h.Player();
+    p.preloadBytes = 8;
+    await p.startStream();
+    await p.queueAudioChunk(pcm(1, 2));
+    assert.equal(h.contexts[0].sources.length, 0);
+    await p.queueAudioChunk(pcm(3, 4));
+    assert.equal(h.contexts[0].sources.length, 2);
+    assert.equal(h.contexts[0].gain.gain.value, 0.8);
+});
+
+test('azure reports completion once after the last scheduled audio ends', async () => {
     const h = harness(), p = new h.Player();
     let done = 0;
     p.setOnCompleteCallback(() => done++);
-    p.minSegmentSize = 100;
+    p.preloadBytes = 1000;
     await p.startStream();
-    const source = h.sources[0], audio = h.audios[0];
-    await p.queueAudioChunk(bytes('short'));
+    await p.queueAudioChunk(pcm(1, 2, 3));
     await p.onSynthesisComplete();
-    assert.equal(audio.plays, 1, 'short text plays once synthesis is complete');
-    assert.equal(source.endCalls, 0, 'endOfStream waits for the pending append');
-    source.buffer.finishUpdate();
-    assert.equal(source.endCalls, 1);
-    audio.onended();
+    assert.equal(h.contexts[0].sources.length, 1, 'short text plays once synthesis is complete');
+    assert.equal(done, 0);
+    endAll(h.contexts[0]);
     assert.equal(done, 1);
-    assert.equal(h.revoked.length, 1);
 });
 
-test('azure stop while the MediaSource opens does not hang, and stale events are ignored', async () => {
+test('azure completes immediately when Azure returned no audio', async () => {
     const h = harness(), p = new h.Player();
     let done = 0;
     p.setOnCompleteCallback(() => done++);
-    await p.initialize();
-    h.audios[0].autoOpen = false;
-    const starting = p.startStream();
-    await tick();
-    const staleEnded = h.audios[0].onended;
+    await p.startStream();
+    await p.onSynthesisComplete();
+    assert.equal(done, 1);
+});
+
+test('azure stop silences scheduled audio and ignores its late end events', async () => {
+    const h = harness(), p = new h.Player();
+    let done = 0;
+    p.setOnCompleteCallback(() => done++);
+    await p.startStream();
+    await p.queueAudioChunk(pcm(1, 2));
+    const [source] = h.contexts[0].sources;
+    const lateEnded = source.onended;
     p.stop();
-    await starting;
-    staleEnded();
+    assert.equal(source.stopped, true);
+    assert.equal(source.onended, null);
+    lateEnded();
     assert.equal(done, 0);
     assert.equal(h.addon.data.tts.state, 'idle');
 });
 
-test('azure pause before playback starts defers the start until resume', async () => {
+test('azure pause suspends the clock and resume continues it', async () => {
     const h = harness(), p = new h.Player();
-    p.minSegmentSize = 2;
     await p.startStream();
+    await p.queueAudioChunk(pcm(1, 2));
     p.pause();
-    await p.queueAudioChunk(bytes('abcd'));
-    assert.equal(h.audios[0].plays, 0);
+    assert.equal(h.contexts[0].state, 'suspended');
+    assert.equal(h.addon.data.tts.state, 'paused');
     p.resume();
-    assert.equal(h.audios[0].plays, 1);
+    assert.equal(h.contexts[0].state, 'running');
     assert.equal(h.addon.data.tts.state, 'playing');
 });
 
-test('azure reports unsupported WebM streaming instead of playing nothing', async () => {
-    const h = harness({supported: false}), p = new h.Player();
+test('azure pause before playback starts defers scheduling until resume', async () => {
+    const h = harness(), p = new h.Player();
+    p.preloadBytes = 2;
+    await p.startStream();
+    p.pause();
+    await p.queueAudioChunk(pcm(1, 2));
+    assert.equal(h.contexts[0].sources.length, 0);
+    p.resume();
+    assert.equal(h.contexts[0].sources.length, 1);
+});
+
+test('azure reports missing Web Audio instead of playing nothing', async () => {
+    const h = harness({audioContext: false}), p = new h.Player();
     await assert.rejects(p.startStream(), /playback-unsupported/);
 });
 
-test('azure append failure stops playback and notifies', async () => {
-    const h = harness(), p = new h.Player();
-    await p.startStream();
-    h.sources[0].buffer.appendBuffer = () => {throw new Error('QuotaExceededError');};
-    await p.queueAudioChunk(bytes('x'));
-    assert.equal(h.addon.data.tts.state, 'idle');
-    assert.equal(h.notices.at(-1)[1], 'playback-failed');
+test('azure SSML applies the rate, escapes text and selects the language of multilingual voices', () => {
+    const {buildSsml} = harness();
+    const ssml = buildSsml('A < B & "C"', 'en-US-FableTurboMultilingualNeural', 'en-GB', 131);
+    assert.match(ssml, /<voice name="en-US-FableTurboMultilingualNeural"><lang xml:lang="en-GB"><prosody rate="\+31%">A &lt; B &amp; &quot;C&quot;<\/prosody><\/lang><\/voice>/);
+    assert.doesNotMatch(buildSsml('x', 'en-GB-SoniaNeural', 'en-GB', 100), /<lang /);
+    assert.match(buildSsml('x', 'en-GB-SoniaNeural', 'en-GB', 400), /rate="\+100%"/);
+    assert.match(buildSsml('x', 'en-GB-SoniaNeural', 'en-GB', 25), /rate="-50%"/);
+    assert.match(buildSsml('a\u0000b', 'en-GB-SoniaNeural', 'en-GB', 100), />a b</);
 });

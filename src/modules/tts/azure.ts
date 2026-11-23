@@ -102,20 +102,22 @@ class TextSectionSplitter {
     }
 }
 
-// Audio player that streams Azure's WebM/Opus output into one MediaSource.
+// Audio player that schedules Azure's raw PCM output back to back with Web Audio.
 // Playing every few kilobytes as a separate Ogg file left an audible gap at
-// each file switch. One continuous stream has no switches, and the audio
-// element keeps the pitch when the playback rate is changed.
+// each file switch. Zotero disables WebM, so MediaSource streaming is not an
+// option, but Web Audio needs no codec and schedules chunks sample-exactly.
+// The speaking rate is applied by Azure through SSML, so pitch stays natural.
 class AudioPlayer {
-    private static readonly MIME_TYPE = 'audio/webm; codecs="opus"';
+    private static readonly SAMPLE_RATE = 24000; // raw-24khz-16bit-mono-pcm
+    private static readonly START_DELAY = 0.05; // seconds of scheduling headroom
 
-    private audioElement: HTMLAudioElement | null = null;
-    private mediaSource: MediaSource | null = null;
-    private sourceBuffer: SourceBuffer | null = null;
-    private objectUrl: string | null = null;
-    private cancelSourceOpen: (() => void) | null = null;
+    private context: AudioContext | null = null;
+    private gainNode: GainNode | null = null;
+    private activeSources: Set<AudioBufferSourceNode> = new Set();
     private pendingChunks: Uint8Array[] = [];
+    private carryByte: number | null = null; // odd trailing byte of a 16-bit sample
     private receivedBytes: number = 0;
+    private nextStartTime: number = 0;
     private hasStarted: boolean = false;
     private isPaused: boolean = false;
     private isSynthesisComplete: boolean = false;
@@ -123,74 +125,45 @@ class AudioPlayer {
     private generation: number = 0;
     private onAllSegmentsComplete?: () => void;
 
-    // Bytes to receive before playback starts (the "Playback Preload Amount")
-    private _minSegmentSize: number = 8 * 1024;
-
-    public get minSegmentSize(): number {
-        return this._minSegmentSize;
-    }
-
-    public set minSegmentSize(size: number) {
-        this._minSegmentSize = size;
-    }
+    // Bytes of PCM to receive before playback starts
+    public preloadBytes: number = 0;
 
     public async initialize(): Promise<void> {
-        if (!this.audioElement) {
-            this.audioElement = new window.Audio();
-            this.audioElement.autoplay = false;
+        if (this.context) {
+            return;
         }
+        const AudioContextClass = window.AudioContext;
+        if (!AudioContextClass) {
+            ztoolkit.log("Web Audio AudioContext is not available");
+            throw new Error("playback-unsupported");
+        }
+        this.context = new AudioContextClass();
+        this.gainNode = this.context.createGain();
+        this.gainNode.connect(this.context.destination);
     }
 
     public setOnCompleteCallback(callback: () => void): void {
         this.onAllSegmentsComplete = callback;
     }
 
-    // Open a fresh MediaSource for one synthesis turn. Resolves once it accepts data.
+    // Prepare for one synthesis turn
     public async startStream(): Promise<void> {
         await this.initialize();
         this.resetAudioState();
-        const generation = this.generation;
-
-        const MediaSourceClass = window.MediaSource;
-        if (!MediaSourceClass || !MediaSourceClass.isTypeSupported(AudioPlayer.MIME_TYPE)) {
-            ztoolkit.log(`MediaSource does not support ${AudioPlayer.MIME_TYPE}`);
-            throw new Error("playback-unsupported");
+        this.gainNode!.gain.value = (getPref("azure.volume") as number) / 100;
+        if (this.context!.state === "suspended" && !this.isPaused) {
+            await this.context!.resume().catch((error) => ztoolkit.log(`AudioContext resume failed: ${error}`));
         }
-
-        const audio = this.audioElement!;
-        const mediaSource = new MediaSourceClass();
-        this.mediaSource = mediaSource;
-        this.objectUrl = URL.createObjectURL(mediaSource);
-        audio.onended = () => this.onMediaEnded(generation);
-        audio.onerror = () => this.onMediaError(generation, `media error code ${audio.error?.code}`);
-
-        await new Promise<void>((resolve) => {
-            this.cancelSourceOpen = resolve;
-            mediaSource.addEventListener("sourceopen", () => resolve(), { once: true });
-            audio.src = this.objectUrl!;
-        });
-        this.cancelSourceOpen = null;
-
-        if (generation !== this.generation) {
-            return; // Stopped while the MediaSource was opening
-        }
-
-        const sourceBuffer = mediaSource.addSourceBuffer(AudioPlayer.MIME_TYPE);
-        sourceBuffer.addEventListener("updateend", () => {
-            if (generation === this.generation) {
-                this.flush();
-            }
-        });
-        sourceBuffer.addEventListener("error", () => this.onMediaError(generation, "source buffer error"));
-        this.sourceBuffer = sourceBuffer;
-        this.flush();
     }
 
     public async queueAudioChunk(audioData: Uint8Array): Promise<void> {
         this.pendingChunks.push(audioData);
         this.receivedBytes += audioData.length;
-        this.flush();
-        this.maybeStartPlayback();
+        if (this.hasStarted) {
+            this.schedulePending();
+        } else {
+            this.maybeStartPlayback();
+        }
     }
 
     public async onSynthesisComplete(): Promise<void> {
@@ -198,24 +171,29 @@ class AudioPlayer {
         ztoolkit.log(`onSynthesisComplete: received ${this.receivedBytes} bytes`);
 
         if (this.receivedBytes === 0) {
-            // Nothing to play, so no "ended" event will come
-            this.onMediaEnded(this.generation);
+            // Nothing to play, so no source will end
+            this.finish(this.generation);
             return;
         }
 
-        this.flush();
-        this.maybeStartPlayback();
+        if (this.hasStarted) {
+            this.schedulePending();
+            this.checkFinished();
+        } else {
+            this.maybeStartPlayback();
+        }
     }
 
     public pause(): void {
         if (this.isPaused || addon.data.tts.state === "idle") {
             return;
         }
-        if (this.audioElement && this.hasStarted) {
-            this.audioElement.pause();
-        }
         this.isPaused = true;
         addon.data.tts.state = "paused";
+        if (this.hasStarted && this.context) {
+            // Suspending freezes the context clock, so scheduled audio resumes in place
+            this.context.suspend().catch((error) => ztoolkit.log(`AudioContext suspend failed: ${error}`));
+        }
     }
 
     public resume(): void {
@@ -225,9 +203,8 @@ class AudioPlayer {
         this.isPaused = false;
         addon.data.tts.state = "playing";
 
-        if (this.hasStarted && this.audioElement) {
-            this.audioElement.play()?.catch((error) =>
-                this.onMediaError(this.generation, `resume failed: ${error}`));
+        if (this.hasStarted && this.context) {
+            this.context.resume().catch((error) => this.onPlaybackError(this.generation, `resume failed: ${error}`));
         } else {
             this.maybeStartPlayback();
         }
@@ -235,67 +212,114 @@ class AudioPlayer {
 
     public stop(): void {
         this.resetAudioState();
+        if (this.isPaused && this.context) {
+            this.context.resume().catch((error) => ztoolkit.log(`AudioContext resume failed: ${error}`));
+        }
         this.isPaused = false;
         addon.data.tts.state = "idle";
     }
 
     public dispose(): void {
         this.stop();
-        this.audioElement = null;
-    }
-
-    // Append queued chunks one at a time; SourceBuffer accepts no new data while updating
-    private flush(): void {
-        const sourceBuffer = this.sourceBuffer;
-        const mediaSource = this.mediaSource;
-        if (!sourceBuffer || !mediaSource || sourceBuffer.updating || mediaSource.readyState !== "open") {
-            return;
+        if (this.context) {
+            this.context.close().catch(() => {});
         }
-
-        if (this.pendingChunks.length > 0) {
-            const data = concatChunks(this.pendingChunks);
-            this.pendingChunks = [];
-            try {
-                sourceBuffer.appendBuffer(data);
-            } catch (error) {
-                this.onMediaError(this.generation, `appendBuffer failed: ${error}`);
-            }
-            return;
-        }
-
-        if (this.isSynthesisComplete) {
-            try {
-                mediaSource.endOfStream();
-            } catch (error) {
-                ztoolkit.log(`endOfStream failed: ${error}`);
-            }
-        }
+        this.context = null;
+        this.gainNode = null;
     }
 
     private maybeStartPlayback(): void {
-        if (this.hasStarted || this.isPaused || !this.audioElement || !this.objectUrl) {
+        if (this.hasStarted || this.isPaused || !this.context) {
             return;
         }
-        if (this.receivedBytes < this.minSegmentSize && !this.isSynthesisComplete) {
+        if (this.receivedBytes < this.preloadBytes && !this.isSynthesisComplete) {
             return;
         }
 
         this.hasStarted = true;
-        const audio = this.audioElement;
-        const generation = this.generation;
-
-        // Set after the src is assigned, because loading a new src resets playbackRate
-        const rate = (getPref("azure.rate") as number) / 100;
-        audio.volume = (getPref("azure.volume") as number) / 100;
-        (audio as HTMLAudioElement & { preservesPitch: boolean }).preservesPitch = true;
-        audio.defaultPlaybackRate = rate;
-        audio.playbackRate = rate;
-
+        this.nextStartTime = this.context.currentTime + AudioPlayer.START_DELAY;
         ztoolkit.log(`Starting playback after ${this.receivedBytes} bytes`);
-        audio.play()?.catch((error) => this.onMediaError(generation, `play failed: ${error}`));
+        this.schedulePending();
+        this.checkFinished();
     }
 
-    private onMediaEnded(generation: number): void {
+    // Turn queued PCM into buffers that start exactly where the previous one ends
+    private schedulePending(): void {
+        const context = this.context;
+        const gainNode = this.gainNode;
+        if (!context || !gainNode) {
+            return;
+        }
+        const generation = this.generation;
+        const chunks = this.pendingChunks;
+        this.pendingChunks = [];
+
+        for (const chunk of chunks) {
+            const samples = this.toSamples(chunk);
+            if (samples.length === 0) {
+                continue;
+            }
+
+            try {
+                const buffer = context.createBuffer(1, samples.length, AudioPlayer.SAMPLE_RATE);
+                buffer.copyToChannel(samples, 0);
+                const source = context.createBufferSource();
+                source.buffer = buffer;
+                source.connect(gainNode);
+
+                let startTime = this.nextStartTime;
+                if (startTime < context.currentTime) {
+                    // Audio arrived later than it was needed; a gap cannot be avoided here
+                    ztoolkit.log(`Azure audio underrun of ${(context.currentTime - startTime).toFixed(3)} s`);
+                    startTime = context.currentTime + AudioPlayer.START_DELAY;
+                }
+                source.onended = () => {
+                    this.activeSources.delete(source);
+                    if (generation === this.generation) {
+                        this.checkFinished();
+                    }
+                };
+                source.start(startTime);
+                this.activeSources.add(source);
+                this.nextStartTime = startTime + buffer.duration;
+            } catch (error) {
+                this.onPlaybackError(generation, `scheduling failed: ${error}`);
+                return;
+            }
+        }
+    }
+
+    // Decode little-endian 16-bit PCM, carrying an odd byte over to the next chunk
+    private toSamples(chunk: Uint8Array): Float32Array<ArrayBuffer> {
+        let bytes = chunk;
+        if (this.carryByte !== null) {
+            bytes = new Uint8Array(chunk.length + 1);
+            bytes[0] = this.carryByte;
+            bytes.set(chunk, 1);
+            this.carryByte = null;
+        }
+
+        const sampleCount = bytes.length >> 1;
+        if (bytes.length % 2 === 1) {
+            this.carryByte = bytes[bytes.length - 1];
+        }
+
+        const view = new DataView(bytes.buffer, bytes.byteOffset, sampleCount * 2);
+        const samples = new Float32Array(sampleCount);
+        for (let i = 0; i < sampleCount; i++) {
+            samples[i] = view.getInt16(i * 2, true) / 32768;
+        }
+        return samples;
+    }
+
+    private checkFinished(): void {
+        if (this.hasStarted && this.isSynthesisComplete
+            && this.pendingChunks.length === 0 && this.activeSources.size === 0) {
+            this.finish(this.generation);
+        }
+    }
+
+    private finish(generation: number): void {
         if (generation !== this.generation) {
             return;
         }
@@ -308,7 +332,7 @@ class AudioPlayer {
         }
     }
 
-    private onMediaError(generation: number, message: string): void {
+    private onPlaybackError(generation: number, message: string): void {
         if (generation !== this.generation) {
             return;
         }
@@ -324,51 +348,28 @@ class AudioPlayer {
     private resetAudioState(): void {
         this.generation++;
 
-        if (this.cancelSourceOpen) {
-            this.cancelSourceOpen();
-            this.cancelSourceOpen = null;
+        for (const source of this.activeSources) {
+            source.onended = null;
+            try {
+                source.stop();
+            } catch (error) {
+                // Already stopped
+            }
         }
+        this.activeSources.clear();
 
         this.pendingChunks = [];
+        this.carryByte = null;
         this.receivedBytes = 0;
+        this.nextStartTime = 0;
         this.hasStarted = false;
         this.isSynthesisComplete = false;
-        this.sourceBuffer = null;
-        this.mediaSource = null;
-
-        if (this.audioElement) {
-            this.audioElement.onended = null;
-            this.audioElement.onerror = null;
-            if (!this.audioElement.paused) {
-                this.audioElement.pause();
-            }
-            if (this.audioElement.src) {
-                this.audioElement.removeAttribute("src");
-                this.audioElement.load();
-            }
-        }
-
-        if (this.objectUrl) {
-            URL.revokeObjectURL(this.objectUrl);
-            this.objectUrl = null;
-        }
     }
 }
 
-function concatChunks(chunks: Uint8Array[]): Uint8Array<ArrayBuffer> {
-    const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-    const data = new Uint8Array(total);
-    let offset = 0;
-    for (const chunk of chunks) {
-        data.set(chunk, offset);
-        offset += chunk.length;
-    }
-    return data;
-}
-
-// WebSocket v2 connection manager for Azure Speech
+// WebSocket v1 connection manager for Azure Speech (SSML in, PCM audio out)
 class AzureStreamingSynthesizer {
-    private static readonly TURN_START_TIMEOUT = 5000;
+    private static readonly TURN_START_TIMEOUT = 10000;
 
     private ws: WebSocket | null = null;
     private requestId: string = "";
@@ -400,7 +401,7 @@ class AzureStreamingSynthesizer {
         const connectionId = this.generateGuid();
 
         // Build WebSocket URL
-        let wsUrl = `wss://${region}.tts.speech.microsoft.com/cognitiveservices/websocket/v2`;
+        let wsUrl = `wss://${region}.tts.speech.microsoft.com/cognitiveservices/websocket/v1`;
         wsUrl += `?ConnectionId=${connectionId}`;
         wsUrl += `&X-ConnectionId=${connectionId}`;
 
@@ -483,8 +484,10 @@ class AzureStreamingSynthesizer {
         // Read configuration from preferences
         const languageId = (getPref("azure.language") as string || "").trim();
         const voiceName = (getPref("azure.voice") as string || "").trim();
+        // The preload setting was sized for Opus at ~3 KB per second of speech;
+        // PCM needs 48 KB per second, so keep the same duration of preloaded audio
         const minSegmentSizeKB = getPref("azure.minSegmentSize") as number || 8;
-        this.audioPlayer.minSegmentSize = minSegmentSizeKB * 1024;
+        this.audioPlayer.preloadBytes = minSegmentSizeKB * 1024 * 16;
 
         if (!languageId || !voiceName) {
             ztoolkit.log(`Azure TTS configuration incomplete: language="${languageId}", voice="${voiceName}"`);
@@ -510,7 +513,11 @@ class AzureStreamingSynthesizer {
         }
 
         // Send speech.config
-        const configMessage = this.buildMessage('speech.config', {});
+        const configMessage = this.buildMessage('speech.config', {
+            context: {
+                system: { name: "ZoTTS", version: "1.0.0", build: "JavaScript", lang: "JavaScript" }
+            }
+        });
         this.ws?.send(configMessage);
 
         // Send synthesis.context
@@ -525,18 +532,14 @@ class AzureStreamingSynthesizer {
                         punctuationBoundaryEnabled: false,
                         sessionEndEnabled: true
                     },
-                    outputFormat: 'webm-24khz-16bit-mono-opus'
+                    outputFormat: 'raw-24khz-16bit-mono-pcm'
                 },
                 language: {
                     autoDetection: false
-                },
-                input: {
-                    bidirectionalStreamingMode: true,
-                    voiceName: voiceName,
-                    language: languageId
                 }
             }
         });
+        this.ws?.send(contextMessage);
 
         // Wait for turn.start response
         const turnStartPromise = new Promise<void>((resolve, reject) => {
@@ -544,7 +547,11 @@ class AzureStreamingSynthesizer {
             this.turnStartReject = reject;
         });
 
-        this.ws?.send(contextMessage);
+        // Send the whole section as SSML, so Azure applies the speaking rate itself
+        const rate = getPref("azure.rate") as number || 100;
+        ztoolkit.log(`Sending section SSML: ${sectionText.length} characters`);
+        addon.data.tts.state = "playing";
+        this.ws?.send(this.buildMessage('ssml', buildSsml(sectionText, voiceName, languageId, rate), 'application/ssml+xml'));
 
         try {
             await Promise.race([
@@ -553,32 +560,14 @@ class AzureStreamingSynthesizer {
                     setTimeout(() => reject(new Error("Timeout waiting for turn.start")), AzureStreamingSynthesizer.TURN_START_TIMEOUT)
                 )
             ]);
-
-            // Check if cancelled during wait
+        } catch (error) {
             if (this.isStopped) {
                 ztoolkit.log("Synthesis cancelled while waiting for turn.start");
                 return;
             }
-        } catch (error) {
             ztoolkit.log(`Error waiting for turn.start: ${error}`);
             throw error;
         }
-
-        // Check if stopped after waiting for turn.start
-        if (this.isStopped) {
-            return;
-        }
-
-        // Send section text
-        ztoolkit.log(`Sending section text: ${sectionText.length} characters`);
-        addon.data.tts.state = "playing";
-
-        const textMessage = this.buildMessage('text.piece', sectionText, 'text/plain');
-        this.ws?.send(textMessage);
-
-        // Immediately send text.end to signal completion
-        const endMessage = this.buildMessage('text.end', '', 'text/plain');
-        this.ws?.send(endMessage);
 
         ztoolkit.log(`Section text sent, waiting for audio synthesis to complete`);
     }
@@ -671,8 +660,8 @@ class AzureStreamingSynthesizer {
             ''
         ];
 
-        // For text/plain messages, body is already a string; for JSON messages, stringify it
-        const content = contentType === 'text/plain' ? body : JSON.stringify(body);
+        // String bodies (SSML, text) are sent as-is; objects are sent as JSON
+        const content = typeof body === 'string' ? body : JSON.stringify(body);
         return headers.join('\r\n') + content;
     }
 
@@ -779,6 +768,40 @@ class AzureStreamingSynthesizer {
 
         return headers;
     }
+}
+
+// Azure accepts speaking rates between half and double speed
+const MIN_RATE_PERCENT = 50;
+const MAX_RATE_PERCENT = 200;
+
+function escapeXml(text: string): string {
+    return text
+        // Characters that XML 1.0 does not allow, for example from PDF extraction
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, " ")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&apos;");
+}
+
+function buildSsml(text: string, voiceName: string, languageId: string, ratePercent: number): string {
+    const clamped = Math.min(MAX_RATE_PERCENT, Math.max(MIN_RATE_PERCENT, Math.round(ratePercent)));
+    if (clamped !== ratePercent) {
+        ztoolkit.log(`Azure rate ${ratePercent}% is outside ${MIN_RATE_PERCENT}-${MAX_RATE_PERCENT}%, using ${clamped}%`);
+    }
+    const relative = clamped - 100;
+    const rate = `${relative >= 0 ? "+" : ""}${relative}%`;
+
+    let content = `<prosody rate="${rate}">${escapeXml(text)}</prosody>`;
+    // A multilingual voice speaks another of its languages only inside <lang>
+    const voiceLocale = voiceName.split("-").slice(0, 2).join("-");
+    if (voiceLocale.toLowerCase() !== languageId.toLowerCase()) {
+        content = `<lang xml:lang="${escapeXml(languageId)}">${content}</lang>`;
+    }
+
+    return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${escapeXml(languageId)}">`
+        + `<voice name="${escapeXml(voiceName)}">${content}</voice></speak>`;
 }
 
 // Singleton instance management
