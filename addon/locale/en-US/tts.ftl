@@ -30,6 +30,8 @@ ttsEngine-errorCause = { $engine ->
         [auth-failed] Authentication failed (check subscription key)
         [connection-failed] Failed to connect to Azure service
         [connection-closed] Connection to Azure service was unexpectedly closed
+        [playback-unsupported] This Zotero version cannot stream WebM audio
+        [playback-failed] Audio playback failed
         *[other] Unknown Error
     }
     [openai] { $cause ->
